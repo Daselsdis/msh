@@ -1,14 +1,14 @@
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -g -Wno-error
+CFLAGS = -Wall -g -ansi
 LEX = flex
-YACC = bison
+YACC = bison --yacc
 YFLAGS = -d
 
 # Project structure
 SRC_DIR = src
 BIN_DIR = bin
-TARGET = myprogram
+TARGET = msh
 
 # Find all source files
 LEX_SRC = $(wildcard $(SRC_DIR)/*.l)
@@ -17,12 +17,15 @@ C_SRCS = $(wildcard $(SRC_DIR)/*.c)
 
 # Generated files from flex/bison
 LEX_C = $(LEX_SRC:.l=.c)
-YACC_C = $(YACC_SRC:.y=.c)
-YACC_H = $(YACC_SRC:.y=.h)
+YACC_C = $(SRC_DIR)/y.tab.c
+# YACC_C = $(YACC_SRC:.y=.c)
+YACC_H = $(SRC_DIR)/y.tab.h
+# YACC_H = $(YACC_SRC:.y=.h)
 
 # Object files (will be in bin directory)
 LEX_OBJ = $(patsubst $(SRC_DIR)/%.c,$(BIN_DIR)/%.o,$(LEX_C))
-YACC_OBJ = $(patsubst $(SRC_DIR)/%.c,$(BIN_DIR)/%.o,$(YACC_C))
+# YACC_OBJ = $(patsubst $(SRC_DIR)/%.c,$(BIN_DIR)/%.o,$(YACC_C))
+YACC_OBJ = $(BIN_DIR)/y.tab.o
 C_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BIN_DIR)/%.o,$(C_SRCS))
 
 # All object files
@@ -39,11 +42,7 @@ $(BIN_DIR):
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
-	# Compile main.c with no warnings at all
-$(BIN_DIR)/main.o: $(SRC_DIR)/main.c | $(BIN_DIR)
-	$(CC) -g -c -o $@ $<
-
-# Compile other C files normally
+# Compile C files normally
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.c | $(BIN_DIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
@@ -52,8 +51,8 @@ $(SRC_DIR)/%.c: $(SRC_DIR)/%.l
 	$(LEX) -o $@ $<
 
 # Bison rule: generate .c and .h from .y
-$(SRC_DIR)/%.c $(SRC_DIR)/%.h: $(SRC_DIR)/%.y
-	$(YACC) $(YFLAGS) -o $(SRC_DIR)/$*.c $<
+$(YACC_C) $(YACC_H): $(YACC_SRC)
+	cd $(SRC_DIR) && $(YACC) $(YFLAGS) $(notdir $<)
 
 # Clean build artifacts
 clean:
