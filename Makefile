@@ -1,6 +1,6 @@
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -g -ansi -fsanitize=address
+CFLAGS = -Wall -g -fsanitize=address
 LEX = flex
 YACC = bison --yacc
 YFLAGS = -d
