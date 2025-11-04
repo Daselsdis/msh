@@ -18,6 +18,7 @@
  * THIS FILE IS TO BE MODIFIED
  */
 
+#include "parser.h"
 #include <stddef.h> /* NULL */
 #include <stdio.h>  /* setbuf, printf */
 #include <stdlib.h>
@@ -47,7 +48,7 @@ int main(void) {
     argvc = ret - 1; /* Line */
     if (argvc == 0)
       continue; /* Empty line */
-#if 1
+#if 0
     /*
      * LAS LINEAS QUE A CONTINUACION SE PRESENTAN SON SOLO
      * PARA DAR UNA IDEA DE COMO UTILIZAR LAS ESTRUCTURAS
@@ -70,6 +71,13 @@ int main(void) {
  * FIN DE LA PARTE A ELIMINAR
  */
 #endif
+    argvc = 0;
+    for (; (argv = argvv[argvc]); argvc++) {
+      argc = 0;
+      for (; argv[argc]; argc++)
+        printf("%s ", argv[argc]);
+      printf("\n");
+    }
   }
   exit(0);
   return 0;
