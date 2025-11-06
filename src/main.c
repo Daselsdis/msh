@@ -21,9 +21,38 @@
 #include <stddef.h> /* NULL */
 #include <stdio.h>  /* setbuf, printf */
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 extern int obtain_order(char ****argvvp, char *filep[3],
                         int *bgp); /* See parser.y for description */
+
+char *commands = {"cd"};
+
+int cd(char *args) {
+  char *dir;
+  if (args == NULL) { /* NOT passed a dir, $HOME */
+    dir = getenv("HOME");
+    if (dir != NULL) {
+      return chdir(dir);
+    } else {
+    }
+  } else {                /* Passed a dir */
+    if (args[0] == '~') { /* Passed a dir from $HOME */
+      dir = getenv("HOME");
+      if (dir != NULL) {
+        strcat(dir, args);
+        return chdir(dir);
+      } else {
+        perror("$HOME VAR NOT SET");
+      }
+    } else {
+      strcat(dir, args);
+      return chdir(dir);
+    }
+  }
+  return -1;
+}
 
 int main(void) {
   char ***argvv = NULL;
@@ -70,13 +99,27 @@ int main(void) {
  * FIN DE LA PARTE A ELIMINAR
  */
 #endif
-    argvc = 0;
-    for (; (argv = argvv[argvc]); argvc++) {
-      argc = 0;
-      for (; argv[argc]; argc++)
-        printf("%s ", argv[argc]);
-      printf("\n");
+
+    for (argvc = 0; (argv = argvv[argvc]); argvc++) {
+      for (argc = 0; argv[argc]; argc++) {
+        if (strcmp("cd", argv[argc]) == 0) {
+          printf("CD EMPEZANDO");
+          if (cd(argv[argc + 1]) == -1) {
+            perror("Error in cd execution: ");
+          }
+        }
+      }
+      /* printf("%s\n", argv[argc]); */
+      /* printf("Hasta aquí argv %d\n", argvc); */
     }
+    if (filev[0])
+      printf("< %s\n", filev[0]); /* IN */
+    if (filev[1])
+      printf("> %s\n", filev[1]); /* OUT */
+    if (filev[2])
+      printf(">& %s\n", filev[2]); /* ERR */
+    if (bg)
+      printf("&\n");
   }
   exit(0);
   return 0;
