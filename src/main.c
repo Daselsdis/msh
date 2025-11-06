@@ -21,7 +21,8 @@
 #include <stddef.h> /* NULL */
 #include <stdio.h>  /* setbuf, printf */
 #include <stdlib.h>
-
+#include <unistd.h>
+#include <string.h>
 extern int obtain_order(char ****argvvp, char *filep[3],
                         int *bgp); /* See parser.y for description */
 
@@ -38,14 +39,19 @@ int main(void) {
   setbuf(stdin, NULL);
 
   while (1) {
-    fprintf(stderr, "%s", "Ψ >"); /* Prompt */
+    char path2[200];
+    getcwd(path2, 200);
+
+    fprintf(stderr, "%s %s", path2,"Ψ >"); /* Prompt */
     ret = obtain_order(&argvv, filev, &bg);
     if (ret == 0)
-      break; /* EOF */
+ //     break; /* EOF */
+         continue;
     if (ret == -1)
       continue;      /* Syntax error */
     argvc = ret - 1; /* Line */
-    if (argvc == 0)
+    if (argvc == 0) /* ERR */
+
       continue; /* Empty line */
 #if 0
     /*
@@ -69,15 +75,31 @@ int main(void) {
 /*
  * FIN DE LA PARTE A ELIMINAR
  */
-#endif
+#endif*/
     argvc = 0;
     for (; (argv = argvv[argvc]); argvc++) {
       argc = 0;
-      for (; argv[argc]; argc++)
-        printf("%s |", argv[argc]);
-      printf("\n");
-    }
-  }
-  exit(0);
-  return 0;
+      for (; argv[argc]; argc++){
+        printf("%s ->", argv[argc]);
+          if(strcmp(argv[argc],"pwd") == 0){
+
+          char path[200];
+        
+            getcwd(path, 200);
+            printf("Current working directory: %s\n", path);
+        }
+        else if (strcmp(argv[argvc], "cd") == 0) {
+          chdir(getenv("HOME"));
+          char path[200];
+        
+            getcwd(path, 200);
+            printf("Current working directory: %s\n", path);
+
+        }
+              printf("\n");
+            }
+          }
+  //exit(0);
+ // return 0;
+ } 
 }
