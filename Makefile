@@ -40,6 +40,7 @@ $(BIN_DIR):
 # Link
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
+	rm $(SRC_DIR)/y.tab.*
 
 debug: CFLAGS+=-g
 debug: all
