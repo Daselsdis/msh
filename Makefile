@@ -1,11 +1,10 @@
-# Compiler and flags
 CC = gcc
-CFLAGS = -Wall -g -fsanitize=address
+CFLAGS = -Wall -Wextra -fsanitize=address
 LEX = flex
 YACC = bison --yacc
-YFLAGS = -d
+YFLAGS = -d -Wno-yacc
 
-# Project structure
+# Structure
 SRC_DIR = src
 BIN_DIR = bin
 TARGET = msh
@@ -22,7 +21,7 @@ YACC_C = $(SRC_DIR)/y.tab.c
 YACC_H = $(SRC_DIR)/y.tab.h
 # YACC_H = $(YACC_SRC:.y=.h)
 
-# Object files (will be in bin directory)
+# Object files
 LEX_OBJ = $(patsubst $(SRC_DIR)/%.c,$(BIN_DIR)/%.o,$(LEX_C))
 # YACC_OBJ = $(patsubst $(SRC_DIR)/%.c,$(BIN_DIR)/%.o,$(YACC_C))
 YACC_OBJ = $(BIN_DIR)/y.tab.o
@@ -38,9 +37,15 @@ all: $(BIN_DIR) $(TARGET)
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-# Link all objects into executable
+# Link
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
+
+debug: CFLAGS+=-g
+debug: all
+
+# min: $(OBJS)
+# 	$(CC) $(CFLAGS) -o $@ $^
 
 # Compile C files normally
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.c | $(BIN_DIR)
@@ -54,16 +59,15 @@ $(SRC_DIR)/%.c: $(SRC_DIR)/%.l
 $(YACC_C) $(YACC_H): $(YACC_SRC)
 	cd $(SRC_DIR) && $(YACC) $(YFLAGS) $(notdir $<)
 
-# Clean build artifacts
+# Clean all*
 clean:
 	rm -rf $(BIN_DIR) $(TARGET) $(LEX_C) $(YACC_C) $(YACC_H)
 
-# Clean everything including generated flex/bison files
-distclean: clean
-	rm -f $(LEX_C) $(YACC_C) $(YACC_H)
+# Clean everything + flex/bison files
+# distclean: clean
+# 	rm -f $(LEX_C) $(YACC_C) $(YACC_H)
 
-# Show variables for debugging
-debug:
+debugVars:
 	@echo "LEX_SRC: $(LEX_SRC)"
 	@echo "YACC_SRC: $(YACC_SRC)"
 	@echo "C_SRCS: $(C_SRCS)"
@@ -72,8 +76,8 @@ debug:
 	@echo "YACC_H: $(YACC_H)"
 	@echo "OBJS: $(OBJS)"
 
-.PHONY: all clean distclean debug
+.PHONY: all clean debugVars
 
 # Dependencies
-# Make sure bison-generated header is available before compiling flex and C files
+# Bison needs to be available b4 flex and c
 $(LEX_OBJ) $(C_OBJS): $(YACC_H)
