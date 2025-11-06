@@ -38,7 +38,7 @@ int main(void) {
   setbuf(stdin, NULL);
 
   while (1) {
-    fprintf(stderr, "%s", "msh> "); /* Prompt */
+    fprintf(stderr, "%s", "Ψ >"); /* Prompt */
     ret = obtain_order(&argvv, filev, &bg);
     if (ret == 0)
       break; /* EOF */
@@ -74,7 +74,7 @@ int main(void) {
     for (; (argv = argvv[argvc]); argvc++) {
       argc = 0;
       for (; argv[argc]; argc++)
-        printf("%s ", argv[argc]);
+        printf("%s |", argv[argc]);
       printf("\n");
     }
   }
