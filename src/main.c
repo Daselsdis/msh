@@ -42,7 +42,7 @@ int main(void) {
     char path2[200];
     getcwd(path2, 200);
 
-    fprintf(stderr, "%s %s", path2,"Ψ >"); /* Prompt */
+    fprintf(stderr, "\n %s %s", path2,"Ψ >"); /* Prompt */
     ret = obtain_order(&argvv, filev, &bg);
     if (ret == 0)
  //     break; /* EOF */
@@ -75,30 +75,74 @@ int main(void) {
 /*
  * FIN DE LA PARTE A ELIMINAR
  */
-#endif*/
+#endif
     argvc = 0;
     for (; (argv = argvv[argvc]); argvc++) {
       argc = 0;
-      for (; argv[argc]; argc++){
         printf("%s ->", argv[argc]);
-          if(strcmp(argv[argc],"pwd") == 0){
+          if(strcmp(argv[0],"pwd") == 0){
 
           char path[200];
         
             getcwd(path, 200);
-            printf("Current working directory: %s\n", path);
-        }
-        else if (strcmp(argv[argvc], "cd") == 0) {
-          chdir(getenv("HOME"));
-          char path[200];
-        
-            getcwd(path, 200);
-            printf("Current working directory: %s\n", path);
-
-        }
-              printf("\n");
-            }
+            printf("Current working directory: %s", path);
           }
+          else if (strcmp(argv[0], "cd") == 0) {
+            char path[200];
+            for (int i = 0;i < 200;i++) {
+              path[i] = '\0';
+            }
+            if(!argv[argvc + 1]){
+              chdir(getenv("HOME"));
+
+            }
+            else{
+                if (!strchr(argv[1],'~')) {
+                    strcpy(path,argv[1]);
+                  }
+                else if (strchr(argv[1],'~') != strrchr(argv[1],'~')) {
+                  fprintf(stderr,"ERROR, solo puede haber un ~ como maximo");
+                  break;
+                }                else if(strchr(argv[1],'~')){
+                    if (strcmp(argv[1],"~") == 0) {
+                      strcpy(path,getenv("HOME"));
+                    }
+                    else if (argv[1][0] == '~') {
+                      strcpy(path,getenv("HOME"));
+                      char* aux = strtok(argv[1],"~");
+                      strcat(path,aux);
+                    }
+                    else if (argv[1][strlen(argv[1])-1] == '~') {
+                    char* aux = strtok(argv[1],"~");
+                    strcpy(path,aux);
+                    strcat(path,getenv("HOME"));
+                    }
+                    else{
+                    char* aux = strtok(argv[1],"~");
+                    strcpy(path,aux);
+                    strcat(path,getenv("HOME"));
+                    aux = strtok(argv[1], "~");
+                    strcat(path,aux);
+                  }
+
+                 }   
+              
+               
+
+
+                 if(chdir(path) == -1){
+                  fprintf(stderr,"ERROR al buscar %s , no existe ese directorio ",path);
+                  }
+              break;
+            }
+                
+            getcwd(path, 200);
+            printf("Current working directory: %s", path);
+
+        }
+        
+              printf("\n");
+    }
   //exit(0);
  // return 0;
  } 
