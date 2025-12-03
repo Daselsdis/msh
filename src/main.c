@@ -21,6 +21,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <glob.h>
 #include <signal.h>
 #include <stddef.h> /* NULL */
 #include <stdio.h>  /* setbuf, printf */
@@ -94,8 +95,8 @@ int main(void) {
     fprintf(stderr, "\n %s %s", path2, "Ψ >"); /* Prompt */
     ret = obtain_order(&argvv, filev, &bg);
     if (ret == 0)
-      //     break; /* EOF */
-      continue;
+      break; /* EOF */
+    //  continue;
     if (ret == -1)
       continue;      /* Syntax error */
     argvc = ret - 1; /* Line */
@@ -131,6 +132,61 @@ int main(void) {
     for (argvc = 0; (argv = argvv[argvc]); argvc++) {
 
       for (argc = 0; (arg = argv[argc]); argc++) {
+
+        char *aux;
+
+        if (!(memchr(arg, '/', strlen(arg)))) {
+
+          if ((memchr(arg, '?', strlen(arg)))) {
+
+            glob_t globaux;
+
+            if (glob(arg, 0, NULL, &globaux) == 0) {
+
+              char **aux_arg;
+              char **aux_arg2;
+
+              aux_arg = &argv[argc];
+              aux_arg2 = aux_arg + 1;
+
+              while (*aux_arg2) {
+
+                aux_arg2++;
+              }
+
+              int siz_fin = (aux_arg2 - (aux_arg + 1));
+              int siz_in = argc;
+              int siz_var = globaux.gl_pathc;
+
+              char **aux_argv2 =
+                  malloc((siz_fin + siz_in + siz_var + 1) * sizeof(char *));
+
+              memcpy(aux_argv2, argv, (siz_in) * sizeof(char *));
+
+              for (int i = 0; i < siz_var; i++) {
+
+                *(aux_argv2 + siz_in + i) = strdup(globaux.gl_pathv[i]);
+              }
+
+              /*memcpy(aux_argv2 + (siz_in), globaux.gl_pathv,
+                     siz_var * sizeof(char *));*/
+
+              memcpy((aux_argv2 + siz_in + siz_var), aux_arg + 1,
+                     siz_fin * sizeof(char *));
+              aux_argv2[siz_in + siz_var + siz_fin] = NULL;
+
+              free(arg);
+              free(argv);
+
+              globfree(&globaux);
+
+              argvv[argvc] = aux_argv2;
+              argv = argvv[argvc];
+              arg = argv[argc];
+            }
+          }
+        }
+
         if (arg[0] == '~') {
           char *arg_aux;
           int sizarg = strlen(argv[argc]);
@@ -143,7 +199,6 @@ int main(void) {
           argv[argc] = arg;
         }
 
-        char *aux;
         if ((aux = memchr(arg, '$', strlen(arg))) != NULL) {
 
           while (aux) {
@@ -158,7 +213,6 @@ int main(void) {
             size_t siz_var = (aux2 - (aux + 1));
             size_t siz_init = (aux - arg);
             size_t siz_fin = strlen(aux2);
-            size_t offset2 = aux2 - arg;
             char *buff_Aux = malloc(siz_var + 1);
             memcpy(buff_Aux, aux + 1, (siz_var));
             buff_Aux[siz_var] = '\0';
@@ -201,46 +255,21 @@ int main(void) {
       } else if (strcmp(argv[0], "cd") == 0) {
 
         char *aux = calloc(200, sizeof(char));
-        ;
+
         if (!argv[1]) {
-          aux = getenv("HOME");
+          // aux = getenv("HOME");
+          strcpy(aux, getenv("HOME"));
         }
 
         else {
-          // if (!strchr(argv[1],'~')) {
+
           strcpy(aux, argv[1]);
-          // }
-          /* else if (strchr(argv[1],'~') != strrchr(argv[1],'~')) {
-             fprintf(stderr,"ERROR, solo puede haber un ~ como maximo");
-             break;
-           }                else if(strchr(argv[1],'~')){
-               if (strcmp(argv[1],"~") == 0) {
-                 strcpy(path,getenv("HOME"));
-               }
-               else if (argv[1][0] == '~') {
-                 strcpy(path,getenv("HOME"));
-                 char* aux = strtok(argv[1],"~");
-                 strcat(path,aux);
-               }
-               else if (argv[1][strlen(argv[1])-1] == '~') {
-               char* aux = strtok(argv[1],"~");
-               strcpy(path,aux);
-               strcat(path,getenv("HOME"));
-               }
-               else{
-               char* aux = strtok(argv[1],"~");
-               strcpy(path,aux);
-               strcat(path,getenv("HOME"));
-               aux = strtok(argv[1], "~");
-               strcat(path,aux);
-             }
+        }
 
-            } */
+        if (chdir(aux) == -1) {
+          fprintf(stderr, "ERROR al buscar %s , no existe ese directorio ",
+                  aux);
 
-          if (chdir(aux) == -1) {
-            fprintf(stderr, "ERROR al buscar %s , no existe ese directorio ",
-                    aux);
-          }
           free(aux);
           break;
         }
@@ -275,11 +304,9 @@ int main(void) {
           for (int i = 1; argv[i] != NULL;) {
             char *aux;
             if (argv[i + 1]) {
-              aux = malloc(200 * sizeof(char));
-              int siz = sprintf(aux, "%s=%s", argv[i], argv[i + 1]);
-              aux = realloc(aux, (siz + 1) * sizeof(char));
-              if (putenv(aux) != 0) {
-                fprintf(stderr, "ERROR putenv");
+
+              if (setenv(argv[i], argv[i + 1], 1) == -1) {
+                fprintf(stderr, "ERROR setenv");
               }
               i++;
             } else {
@@ -302,7 +329,7 @@ int main(void) {
               fprintf(stderr, "ERROR recurso no encontrado");
             } else {
               getrlimit(tipo_recurso(resources[i]), aux);
-              fprintf(stdout, "%s\t%lu", resources[i], aux->rlim_max);
+              fprintf(stdout, "%s\t%ld", resources[i], aux->rlim_max);
               fprintf(stdout, "\n");
             }
           }
@@ -318,6 +345,9 @@ int main(void) {
 
                 if (getrlimit(tipo_recurso(argv[i]), aux) == 0) {
                   aux->rlim_max = strtol(argv[i + 1], NULL, 0);
+                  if (aux->rlim_cur >= aux->rlim_max) {
+                    aux->rlim_cur = aux->rlim_max - 1;
+                  }
                   if (setrlimit(tipo_recurso(argv[i]), aux) != 0) {
                     perror("ERROR setlimtr");
                   }
