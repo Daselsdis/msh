@@ -18,6 +18,7 @@
  * THIS FILE IS TO BE MODIFIED
  */
 
+#include <assert.h>
 #include <stddef.h> /* NULL */
 #include <stdio.h>  /* setbuf, printf */
 #include <stdlib.h>
@@ -28,6 +29,75 @@ extern int obtain_order(char ****argvvp, char *filep[3],
                         int *bgp); /* See parser.y for description */
 
 char *commands = {"cd"};
+
+typedef struct {
+  int size;
+  char **argsExp;
+} expand;
+
+int strcont(char *str, char *cont) {
+  int res = 0, tempRes, i, j, lenStr = strlen(str), lenCont = strlen(cont);
+
+  for (i = 0; i + lenCont < lenStr && !res; i++) {
+    tempRes = 1;
+    for (j = 0; j < lenCont && tempRes; j++) {
+      tempRes = str[i + j] == cont[j];
+    }
+    res = tempRes;
+  }
+  return !res ? i : -1;
+}
+
+int necesitaExpasion(char *str) {
+  if (str[0] == '~' || strcont(str, "\\") > -1 || strcont(str, "?") > -1 ||
+      strcont(str, "$") > -1)
+    return 1;
+  return 0;
+}
+
+int addExpasion(expand *exp, char *str) {
+  exp->size++;
+  exp->argsExp = realloc(exp->argsExp, exp->size * sizeof(char *));
+  if (exp->argsExp == NULL)
+    return 0;
+  int strLen = strlen(str);
+  exp->argsExp[exp->size - 1] = malloc((strLen + 1) * sizeof(char));
+  if (exp->argsExp[exp->size - 1] == NULL)
+    return 0;
+  memcpy(exp->argsExp[exp->size - 1], str, strLen);
+  exp->argsExp[exp->size - 1][strLen] = '\0';
+  return 1;
+}
+
+expand *expandir(char *str) {
+  expand *res = calloc(1, sizeof(expand));
+
+  if (!necesitaExpasion(str)) {
+    if (!addExpasion(res, str))
+      assert(0 && "ERROR AÑADIENDO A EXPAND");
+    return res;
+  }
+
+  if (strcont(str, "$")) {
+  }
+
+  if (str[0] == '~') {
+    char *dir = getenv("HOME");
+    if (dir != NULL) {
+      strcat(dir, &str[1]);
+    } else {
+      perror("$HOME VAR NOT SET");
+    }
+  }
+
+  return res;
+}
+
+int changeDir(char *path) {
+  if (strcont(path, "~")) {
+  }
+  return 0;
+}
 
 int cd(char *args) {
   char *dir;
@@ -53,7 +123,10 @@ int cd(char *args) {
   }
   return -1;
 }
-
+/* TODO: Implementar que si un mandato termina en "\\", se considera error si no
+ * hay otro mandato siguiendo "\ ", que el parser corta por el espacio, por
+ * ahora no se implementa, pero se puede confacilidad, el resto del proceso
+ * debería ser compatible  por defecto.*/
 int main(void) {
   char ***argvv = NULL;
   int argvc;
@@ -76,7 +149,7 @@ int main(void) {
     argvc = ret - 1; /* Line */
     if (argvc == 0)
       continue; /* Empty line */
-#if 0
+#if 1
     /*
      * LAS LINEAS QUE A CONTINUACION SE PRESENTAN SON SOLO
      * PARA DAR UNA IDEA DE COMO UTILIZAR LAS ESTRUCTURAS
