@@ -25,6 +25,15 @@
 #include <string.h>
 #include <unistd.h>
 
+#define charAscii(a) (a - '\0')
+#define cmpChar(cursor, c) (charAscii(cursor) == charAscii(c))
+#define charInRange(cursor, a, b)                                              \
+  (charAscii(cursor) >= charAscii(a) && charAscii(cursor) <= charAscii(b))
+#define cmpA(cursor)                                                           \
+  (charInRange(cursor, 'a', 'z') || charInRange(cursor, 'A', 'Z') ||           \
+   cmpChar(cursor, '_'))
+#define cmpD(cursor) (charInRange(cursor, '0', '9'))
+
 extern int obtain_order(char ****argvvp, char *filep[3],
                         int *bgp); /* See parser.y for description */
 
@@ -35,22 +44,22 @@ typedef struct {
   char **argsExp;
 } expand;
 
-int strcont(char *str, char *cont) {
-  int res = 0, tempRes, i, j, lenStr = strlen(str), lenCont = strlen(cont);
+int strContN(char *str, char cont, int skip) {
+  int res = 0, tempRes, i, j, lenStr = strlen(str), skipped = 0;
 
-  for (i = 0; i + lenCont < lenStr && !res; i++) {
-    tempRes = 1;
-    for (j = 0; j < lenCont && tempRes; j++) {
-      tempRes = str[i + j] == cont[j];
+  for (i = 0; i < lenStr && !res; i++) {
+    res = str[i] == cont;
+    if (res && skipped < skip) {
+      res = 0;
+      skipped++;
     }
-    res = tempRes;
   }
   return !res ? i : -1;
 }
 
 int necesitaExpasion(char *str) {
-  if (str[0] == '~' || strcont(str, "\\") > -1 || strcont(str, "?") > -1 ||
-      strcont(str, "$") > -1)
+  if (str[0] == '~' || strContN(str, '\\', 0) > -1 ||
+      strContN(str, '?', 0) > -1 || strContN(str, '$', 0) > -1)
     return 1;
   return 0;
 }
@@ -69,35 +78,58 @@ int addExpasion(expand *exp, char *str) {
   return 1;
 }
 
+char *getsVarName(char *str) {
+  char *varName = NULL;
+  int len = 0;
+  /*Caso primer caracter, solo puede ser [a-zA-Z_]*/
+  if (cmpA(str[len])) {
+    varName = realloc(varName, (len + 1) * sizeof(char));
+    varName[len] = str[len];
+    len++;
+  }
+  /*Caso general, puede ser [a-zA-Z_0-9]* */
+  while (cmpA(str[len]) || cmpD(str[len])) {
+    varName = realloc(varName, (len + 1) * sizeof(char));
+    varName[len] = str[len];
+    len++;
+  }
+  /*Fin, añadimos \0*/
+  len++;
+  varName = realloc(varName, len * sizeof(char));
+  varName[len] = '\0';
+  ;
+
+  return varName;
+}
+
 expand *expandir(char *str) {
   expand *res = calloc(1, sizeof(expand));
 
   if (!necesitaExpasion(str)) {
     if (!addExpasion(res, str))
       assert(0 && "ERROR AÑADIENDO A EXPAND");
+    /* TODO: Manejo al fallo en expansión, maybe*/
     return res;
   }
-
-  if (strcont(str, "$")) {
+  int pos = strContN(str, '$', 0);
+  if (pos == 0 || (pos > 0 && str[pos - 1] != '\\')) {
+    char *var = getsVarName(&str[pos]);
   }
 
   if (str[0] == '~') {
     char *dir = getenv("HOME");
     if (dir != NULL) {
       strcat(dir, &str[1]);
-    } else {
-      perror("$HOME VAR NOT SET");
-    }
+    } else
+      assert(0 && "$HOME VAR NOT SET");
+    /* TODO: Usar size negativo para errores en la expansión (p.e. size -1 no
+     * $HOME), por tanto liberar res.argsExp*/
   }
 
   return res;
 }
 
-int changeDir(char *path) {
-  if (strcont(path, "~")) {
-  }
-  return 0;
-}
+int changeDir(char *path) { return 0; }
 
 int cd(char *args) {
   char *dir;
