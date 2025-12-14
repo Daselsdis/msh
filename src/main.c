@@ -19,6 +19,7 @@
  */
 
 #include <assert.h>
+#include <errno.h>
 #include <stddef.h> /* NULL */
 #include <stdio.h>  /* setbuf, printf */
 #include <stdlib.h>
@@ -79,27 +80,20 @@ int addExpasion(expand *exp, char *str) {
 }
 
 char *getsVarName(char *str) {
-  char *varName = NULL;
-  int len = 0;
-  /*Caso primer caracter, solo puede ser [a-zA-Z_]*/
-  if (cmpA(str[len])) {
-    varName = realloc(varName, (len + 1) * sizeof(char));
-    varName[len] = str[len];
-    len++;
-  }
-  /*Caso general, puede ser [a-zA-Z_0-9]* */
-  while (cmpA(str[len]) || cmpD(str[len])) {
-    varName = realloc(varName, (len + 1) * sizeof(char));
-    varName[len] = str[len];
-    len++;
-  }
-  /*Fin, añadimos \0*/
-  len++;
-  varName = realloc(varName, len * sizeof(char));
-  varName[len] = '\0';
-  ;
+  char *ret = NULL;
+  int n;
 
-  return varName;
+  errno = 0;
+  n = sscanf(str, "%ms([a-zA-Z_][a-zA-Z0-9_])", &ret);
+
+  if (errno != 0) {
+    perror("sscanf");
+  } else if (ret == NULL) {
+    ret = "";
+    return ret;
+  }
+
+  return ret;
 }
 
 expand *expandir(char *str) {
@@ -181,7 +175,7 @@ int main(void) {
     argvc = ret - 1; /* Line */
     if (argvc == 0)
       continue; /* Empty line */
-#if 1
+#if 0
     /*
      * LAS LINEAS QUE A CONTINUACION SE PRESENTAN SON SOLO
      * PARA DAR UNA IDEA DE COMO UTILIZAR LAS ESTRUCTURAS
@@ -225,6 +219,8 @@ int main(void) {
       printf(">& %s\n", filev[2]); /* ERR */
     if (bg)
       printf("&\n");
+    char *ret = getsVarName(filev[0]);
+    printf("%s", ret);
   }
   exit(0);
   return 0;
