@@ -38,6 +38,13 @@ extern int obtain_order(char ****argvvp, char *filep[3],
 #define STDOUT 1
 #define STDERR 2
 
+void liberar_environ(char **env, int n_var) {
+  for (int i = 0; i < n_var; i++) {
+    free(env[i]);
+  }
+  free(env);
+}
+
 int tipo_recurso(char *str) {
   if (!strcmp(str, "cpu")) {
     return RLIMIT_CPU;
@@ -84,22 +91,38 @@ int main(void) {
   sigaddset(&sigset, SIGINT);
   sigaddset(&sigset, SIGQUIT);
   sigprocmask(SIG_BLOCK, &sigset, NULL);
-
   stdin_sav = dup(STDIN);
   stdout_sav = dup(STDOUT);
   stderr_sav = dup(STDERR);
 
   extern char **environ;
 
-  while (1) {
-    char path2[200];
-    getcwd(path2, 200);
+  int n_envar = 4;
+  char **v_envar = malloc(sizeof(char *) * n_envar);
 
-    fprintf(stderr, " %s %s", path2, "☾✡>"); /* Prompt */
+  v_envar[0] = malloc(snprintf(NULL, 0, "%s=%s", "prompt", "msh>") + 1);
+  v_envar[1] = malloc(snprintf(NULL, 0, "%s=%d", "mypid", getpid()) + 1);
+  v_envar[2] = malloc(snprintf(NULL, 0, "%s=%s", "bgpid", "0") + 1);
+  v_envar[3] = malloc(snprintf(NULL, 0, "%s=%s", "status", "0") + 1);
+
+  sprintf(v_envar[0], "%s=%s", "prompt", "msh> ");
+  sprintf(v_envar[1], "%s=%d", "mypid", getpid());
+  sprintf(v_envar[2], "%s=%s", "bgpid", "0");
+  sprintf(v_envar[3], "%s=%s", "status", "0");
+  for (int i = 0; i < n_envar; i++) {
+    putenv(v_envar[i]);
+  }
+
+  while (1) {
+    char path[200];
+    getcwd(path, 200);
+
+    fprintf(stderr, " %s", getenv("prompt")); /* Prompt */
     ret = obtain_order(&argvv, filev, &bg);
-    if (ret == 0)
+    if (ret == 0) {
+      liberar_environ(v_envar, n_envar);
       break; /* EOF */
-    //  continue;
+    }
     if (ret == -1)
       continue;      /* Syntax error */
     argvc = ret - 1; /* Line */
@@ -140,26 +163,49 @@ int main(void) {
 
     if (bg) {
 
+      int fd[2];
+      pipe(fd);
+
       bgpid = fork();
+
       if (bgpid == -1) {
+        close(fd[0]);
+        close(fd[1]);
 
         fprintf(stderr, "error fork \n");
 
       } else if (bgpid != 0) {
-
+        close(fd[1]);
+        read(fd[0], &bgpid, 4);
+        close(fd[0]);
         wait(NULL);
+
+        char *aux = malloc(snprintf(NULL, 0, "%s=%d", "bgpid", bgpid) + 1);
+        sprintf(aux, "%s=%d", "bgpid", bgpid);
+        putenv(aux);
+        free(v_envar[2]);
+        v_envar[2] = aux;
+
         continue;
 
       } else {
         bgpid = fork();
         if (bgpid == -1) {
 
+          close(fd[0]);
+          close(fd[1]);
+
           fprintf(stderr, "error fork \n");
 
         } else if (bgpid != 0) {
-
+          close(fd[0]);
+          write(fd[1], &bgpid, 4);
+          close(fd[1]);
           printf("[%d]\n", bgpid);
           exit(0);
+        } else {
+          close(fd[0]);
+          close(fd[1]);
         }
       }
     }
@@ -326,61 +372,17 @@ int main(void) {
     }
     contador_sentencias++;
 
-    // int n_sentencia_ejecutar = 0;
+    /*
+     *
+     * Inicializacion pipes
+     *
+     * */
 
     int (*pipes)[2] = malloc((contador_sentencias - 1) * sizeof *pipes);
 
-    /*  for (int i = 0; i < contador_sentencias; i++) {
-
-        if (i < contador_sentencias - 1) {
-
-          if (pipe(pipes[i]) == -1) {
-            fprintf(stderr, "error pipes");
-          }
-        }
-        if (i - 2 >= 0) {
-          close(pipes[i - 2][0]);
-          close(pipes[i - 2][1]);
-        }
-
-        int pid = fork();
-
-        if (pid < 0) {
-
-          fprintf(stderr, "error en fork");
-          break;
-
-        } else if (pid == 0) {
-
-          if (i < contador_sentencias - 1) {
-            close(1);
-            dup(pipes[i][1]);
-            close(pipes[i][1]);
-            close(pipes[i][0]);
-          }
-
-          if (i > 0) {
-            close(0);
-            dup(pipes[i - 1][0]);
-            close(pipes[i - 1][0]);
-            close(pipes[i - 1][1]);
-          }
-
-          break;
-
-        } else {
-          if (i >= contador_sentencias - 1) {
-            close(pipes[i - 1][0]);
-            close(pipes[i - 1][1]);
-          }
-
-          n_sentencia_ejecutar++;
-        }
-      }*/
-
     /*mandatos internnos
      *
-     * mandatos no internos  Execvç
+     * mandatos no internos  Execv
      */
 
     for (argvc = 0; (argv = argvv[argvc]); argvc++) {
@@ -406,6 +408,8 @@ int main(void) {
       }
 
       if (strcmp(argv[0], "exit") == 0) {
+
+        liberar_environ(v_envar, n_envar);
         exit(0);
       }
       if (strcmp(argv[0], "pwd") == 0) {
@@ -460,20 +464,46 @@ int main(void) {
         if (!argv[1]) {
           int i = 0;
           while (environ[i]) {
-            printf("%s\n", environ[i++]); // prints in form of "variable=value"
+            printf("%s\n", environ[i++]);
           }
         } else {
           for (int i = 1; argv[i] != NULL;) {
-            char *aux;
+            char *aux, *aux2;
             if (argv[i + 1]) {
 
-              if (setenv(argv[i], argv[i + 1], 1) == -1) {
-                fprintf(stderr, "ERROR setenv \n");
+              aux = getenv(argv[i]);
+
+              if (!aux) {
+                n_envar++;
+                v_envar = realloc(v_envar, n_envar * sizeof(char *));
+                v_envar[n_envar - 1] = malloc(
+                    snprintf(NULL, 0, "%s=%s", argv[i], argv[i + 1]) + 1);
+                sprintf(v_envar[n_envar - 1], "%s=%s", argv[i], argv[i + 1]);
+                if (putenv(v_envar[n_envar - 1])) {
+                  perror("ERROR putenv");
+                }
+
+              } else {
+
+                aux = malloc(snprintf(NULL, 0, "%s=%s", argv[i], argv[i + 1]) +
+                             1);
+
+                sprintf(aux, "%s=%s", argv[i], argv[i + 1]);
+                putenv(aux);
+
+                /*
+                 * Mem leack inevitable si se usa putenv
+                 *
+                 * */
               }
+
               i++;
             } else {
-              aux = getenv(argv[i]);
-              fprintf(stdout, "%s\n", aux);
+              if (getenv(argv[i])) {
+                printf("%s\n", getenv(argv[i]));
+              } else {
+                printf("variable no declarada\n");
+              }
             }
             i++;
           }
@@ -557,15 +587,17 @@ int main(void) {
         } else {
           int valor;
           wait(&valor);
-          printf("%i \n", valor);
+
+          char *aux = malloc(snprintf(NULL, 0, "%s=%d", "status", valor) + 1);
+          sprintf(aux, "%s=%d", "status", valor);
+          putenv(aux);
+          free(v_envar[3]);
+          v_envar[3] = aux;
         }
       }
     }
     free(pipes);
-    // exit(0);
-    // return 0;
-    //
-    // DEVOLUCION ESTANDAR
+
     close(STDIN);
     dup(stdin_sav);
     close(STDOUT);
