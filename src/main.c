@@ -97,21 +97,15 @@ int main(void) {
 
   extern char **environ;
 
-  int n_envar = 4;
-  char **v_envar = malloc(sizeof(char *) * n_envar);
+  char *tpid = malloc(snprintf(NULL, 0, "%d", getpid()) + 1);
+  sprintf(tpid, "%d", getpid());
 
-  v_envar[0] = malloc(snprintf(NULL, 0, "%s=%s", "prompt", "msh>") + 1);
-  v_envar[1] = malloc(snprintf(NULL, 0, "%s=%d", "mypid", getpid()) + 1);
-  v_envar[2] = malloc(snprintf(NULL, 0, "%s=%s", "bgpid", "0") + 1);
-  v_envar[3] = malloc(snprintf(NULL, 0, "%s=%s", "status", "0") + 1);
+  setenv("prompt", "msh>", 1);
+  setenv("mypid", tpid, 0);
+  free(tpid);
 
-  sprintf(v_envar[0], "%s=%s", "prompt", "msh> ");
-  sprintf(v_envar[1], "%s=%d", "mypid", getpid());
-  sprintf(v_envar[2], "%s=%s", "bgpid", "0");
-  sprintf(v_envar[3], "%s=%s", "status", "0");
-  for (int i = 0; i < n_envar; i++) {
-    putenv(v_envar[i]);
-  }
+  setenv("bgpid", "0", 1);
+  setenv("status", "0", 1);
 
   while (1) {
     char path[200];
@@ -120,7 +114,6 @@ int main(void) {
     fprintf(stderr, " %s", getenv("prompt")); /* Prompt */
     ret = obtain_order(&argvv, filev, &bg);
     if (ret == 0) {
-      liberar_environ(v_envar, n_envar);
       break; /* EOF */
     }
     if (ret == -1)
@@ -180,12 +173,10 @@ int main(void) {
         close(fd[0]);
         wait(NULL);
 
-        char *aux = malloc(snprintf(NULL, 0, "%s=%d", "bgpid", bgpid) + 1);
-        sprintf(aux, "%s=%d", "bgpid", bgpid);
-        putenv(aux);
-        free(v_envar[2]);
-        v_envar[2] = aux;
-
+        char *aux = malloc(snprintf(NULL, 0, "%d", bgpid) + 1);
+        sprintf(aux, "%d", bgpid);
+        setenv("bgpid", aux, 1);
+        free(aux);
         continue;
 
       } else {
@@ -409,7 +400,6 @@ int main(void) {
 
       if (strcmp(argv[0], "exit") == 0) {
 
-        liberar_environ(v_envar, n_envar);
         exit(0);
       }
       if (strcmp(argv[0], "pwd") == 0) {
@@ -468,35 +458,8 @@ int main(void) {
           }
         } else {
           for (int i = 1; argv[i] != NULL;) {
-            char *aux, *aux2;
             if (argv[i + 1]) {
-
-              aux = getenv(argv[i]);
-
-              if (!aux) {
-                n_envar++;
-                v_envar = realloc(v_envar, n_envar * sizeof(char *));
-                v_envar[n_envar - 1] = malloc(
-                    snprintf(NULL, 0, "%s=%s", argv[i], argv[i + 1]) + 1);
-                sprintf(v_envar[n_envar - 1], "%s=%s", argv[i], argv[i + 1]);
-                if (putenv(v_envar[n_envar - 1])) {
-                  perror("ERROR putenv");
-                }
-
-              } else {
-
-                aux = malloc(snprintf(NULL, 0, "%s=%s", argv[i], argv[i + 1]) +
-                             1);
-
-                sprintf(aux, "%s=%s", argv[i], argv[i + 1]);
-                putenv(aux);
-
-                /*
-                 * Mem leack inevitable si se usa putenv
-                 *
-                 * */
-              }
-
+              setenv(argv[i], argv[i + 1], 1);
               i++;
             } else {
               if (getenv(argv[i])) {
@@ -588,11 +551,10 @@ int main(void) {
           int valor;
           wait(&valor);
 
-          char *aux = malloc(snprintf(NULL, 0, "%s=%d", "status", valor) + 1);
-          sprintf(aux, "%s=%d", "status", valor);
-          putenv(aux);
-          free(v_envar[3]);
-          v_envar[3] = aux;
+          char *aux = malloc(snprintf(NULL, 0, "%d", valor) + 1);
+          sprintf(aux, "%d", valor);
+          setenv("status", aux, 1);
+          free(aux);
         }
       }
     }
