@@ -40,6 +40,13 @@ extern int obtain_order(char ****argvvp, char *filep[3],
 
 char *commands = {"cd"};
 
+#define Autosprintf(buff, msg, ...)                                            \
+  {                                                                            \
+    int AUTOSPRINTF = snprintf(NULL, 0, msg, __VA_ARGS__);                     \
+    buff = malloc((AUTOSPRINTF + 1) * sizeof(char));                           \
+    snprintf(buff, AUTOSPRINTF, msg, __VA_ARGS__);                             \
+  }
+
 typedef struct {
   int size;
   char **argsExp;
@@ -56,6 +63,16 @@ int strContN(char *str, char cont, int skip) {
     }
   }
   return !res ? i : -1;
+}
+
+void setIniVars() {
+  setenv("prompt", "msh >", 1);
+  char *Tbuff;
+  Autosprintf(Tbuff, "%d", getpid());
+  setenv("mypid", Tbuff, 1);
+  free(Tbuff);
+  setenv("bgpid", "-1", 1);
+  setenv("status", "0", 1);
 }
 
 int necesitaExpasion(char *str) {
@@ -80,19 +97,28 @@ int addExpasion(expand *exp, char *str) {
 }
 
 char *getsVarName(char *str) {
-  char *ret = NULL;
+  char *rest = NULL;
+  char ini[2] = {0};
   int n;
 
   errno = 0;
-  n = sscanf(str, "%ms([a-zA-Z_][a-zA-Z0-9_])", &ret);
+  n = sscanf(str, "%1[a-zA-Z_]%m[a-zA-Z0-9_]", ini, &rest);
 
   if (errno != 0) {
     perror("sscanf");
-  } else if (ret == NULL) {
-    ret = "";
-    return ret;
+  } else if (n == 0) {
+    rest = "";
+    return rest;
   }
-
+  size_t t_len = strlen(rest) + 2;
+  char *ret = malloc(t_len);
+  if (ret == NULL) {
+    free(rest);
+    return NULL;
+  }
+  ret[0] = ini[0];
+  strcpy(ret + 1, rest);
+  free(rest);
   return ret;
 }
 
