@@ -214,55 +214,54 @@ int main(void) {
 
         char *aux;
 
-        if (!(memchr(arg, '/', strlen(arg)))) {
+        if ((!(memchr(arg, '/', strlen(arg)))) &&
+            (memchr(arg, '?', strlen(arg))) &&
+            (!(memchr(arg, '*', strlen(arg))))) {
 
-          if ((memchr(arg, '?', strlen(arg)))) {
+          glob_t globaux;
 
-            glob_t globaux;
+          if (glob(arg, 0, NULL, &globaux) == 0) {
 
-            if (glob(arg, 0, NULL, &globaux) == 0) {
+            char **aux_arg;
+            char **aux_arg2;
 
-              char **aux_arg;
-              char **aux_arg2;
+            aux_arg = &argv[argc];
+            aux_arg2 = aux_arg + 1;
 
-              aux_arg = &argv[argc];
-              aux_arg2 = aux_arg + 1;
+            while (*aux_arg2) {
 
-              while (*aux_arg2) {
-
-                aux_arg2++;
-              }
-
-              int siz_fin = (aux_arg2 - (aux_arg + 1));
-              int siz_in = argc;
-              int siz_var = globaux.gl_pathc;
-
-              char **aux_argv2 =
-                  malloc((siz_fin + siz_in + siz_var + 1) * sizeof(char *));
-
-              memcpy(aux_argv2, argv, (siz_in) * sizeof(char *));
-
-              for (int i = 0; i < siz_var; i++) {
-
-                *(aux_argv2 + siz_in + i) = strdup(globaux.gl_pathv[i]);
-              }
-
-              /*memcpy(aux_argv2 + (siz_in), globaux.gl_pathv,
-                     siz_var * sizeof(char *));*/
-
-              memcpy((aux_argv2 + siz_in + siz_var), aux_arg + 1,
-                     siz_fin * sizeof(char *));
-              aux_argv2[siz_in + siz_var + siz_fin] = NULL;
-
-              free(arg);
-              free(argv);
-
-              globfree(&globaux);
-
-              argvv[argvc] = aux_argv2;
-              argv = argvv[argvc];
-              arg = argv[argc];
+              aux_arg2++;
             }
+
+            int siz_fin = (aux_arg2 - (aux_arg + 1));
+            int siz_in = argc;
+            int siz_var = globaux.gl_pathc;
+
+            char **aux_argv2 =
+                malloc((siz_fin + siz_in + siz_var + 1) * sizeof(char *));
+
+            memcpy(aux_argv2, argv, (siz_in) * sizeof(char *));
+
+            for (int i = 0; i < siz_var; i++) {
+
+              *(aux_argv2 + siz_in + i) = strdup(globaux.gl_pathv[i]);
+            }
+
+            /*memcpy(aux_argv2 + (siz_in), globaux.gl_pathv,
+                   siz_var * sizeof(char *));*/
+
+            memcpy((aux_argv2 + siz_in + siz_var), aux_arg + 1,
+                   siz_fin * sizeof(char *));
+            aux_argv2[siz_in + siz_var + siz_fin] = NULL;
+
+            free(arg);
+            free(argv);
+
+            globfree(&globaux);
+
+            argvv[argvc] = aux_argv2;
+            argv = argvv[argvc];
+            arg = argv[argc];
           }
         }
 
