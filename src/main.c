@@ -38,6 +38,8 @@
 extern int obtain_order(char ****argvvp, char *filep[3],
                         int *bgp); /* See parser.y for description */
 
+extern char **environ;
+
 char *commands = {"cd"};
 
 #define Autosprintf(buff, msg, ...)                                            \
@@ -98,28 +100,44 @@ int addExpasion(expand *exp, char *str) {
 
 char *getsVarName(char *str) {
   char *rest = NULL;
-  char ini[2] = {0};
   int n;
 
   errno = 0;
-  n = sscanf(str, "%1[a-zA-Z_]%m[a-zA-Z0-9_]", ini, &rest);
+  n = sscanf(str, "%m[a-zA-Z0-9_]", &rest);
 
   if (errno != 0) {
     perror("sscanf");
   } else if (n == 0) {
+    /* free(rest); */
     rest = "";
     return rest;
   }
-  size_t t_len = strlen(rest) + 2;
-  char *ret = malloc(t_len);
-  if (ret == NULL) {
-    free(rest);
-    return NULL;
+  return rest;
+}
+
+void pArgsAll() {
+  char **cursor = environ;
+  while (*cursor) {
+    printf("%s\n", *cursor++);
   }
-  ret[0] = ini[0];
-  strcpy(ret + 1, rest);
-  free(rest);
-  return ret;
+  /* assert(0 && "TODO: Implementar pArgsAll"); */
+}
+
+int set(char *name, char *val) {
+  if (val == NULL) {
+    if (name == NULL)
+      pArgsAll();
+    else {
+      char *res = getenv(name);
+      if (res == NULL)
+        pArgsAll();
+      else
+        printf("%s\n", res);
+    }
+  } else {
+    setenv(name, val, 1);
+  }
+  return 0;
 }
 
 expand *expandir(char *str) {
@@ -191,8 +209,13 @@ int main(void) {
   setbuf(stdout, NULL); /* Unbuffered */
   setbuf(stdin, NULL);
 
+  setIniVars();
+
   while (1) {
-    fprintf(stderr, "%s", "msh> "); /* Prompt */
+
+    char *prompt = getenv("prompt");
+
+    fprintf(stderr, "%s", prompt); /* Prompt */
     ret = obtain_order(&argvv, filev, &bg);
     if (ret == 0)
       break; /* EOF */
@@ -232,6 +255,17 @@ int main(void) {
           if (cd(argv[argc + 1]) == -1) {
             perror("Error in cd execution: ");
           }
+        } else if (strcmp("set", argv[argc]) == 0) {
+
+          /* printf("%s", argv[argc]); */
+          /* printf("%s\n", argv[argc + 1]); */
+          /* printf("%s\n", argv[argc + 2]); */
+          /* printf("%s", argv[argc]); */
+          /* printf("%s", argv[argc + 1]); */
+          if (argv[argc + 1] == NULL)
+            set(NULL, NULL);
+          else
+            set(argv[argc + 1], argv[argc + 2]);
         }
       }
       /* printf("%s\n", argv[argc]); */
@@ -245,8 +279,8 @@ int main(void) {
       printf(">& %s\n", filev[2]); /* ERR */
     if (bg)
       printf("&\n");
-    char *ret = getsVarName(filev[0]);
-    printf("%s", ret);
+    /* char *ret = getsVarName(filev[0]); */
+    /* printf("%s", ret); */
   }
   exit(0);
   return 0;
