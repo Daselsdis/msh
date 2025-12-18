@@ -79,6 +79,7 @@ int main(void) {
 
   int contador_sentencias;
 
+  int es_hijo_bak = 0;
   int bgpid;
   int stdout_sav, stdin_sav, stderr_sav;
   char *resources[] = {"cpu", "fsize", "data", "stack", "core", "nofile"};
@@ -108,6 +109,7 @@ int main(void) {
   setenv("status", "0", 1);
 
   while (1) {
+
     char path[200];
     getcwd(path, 200);
 
@@ -177,6 +179,7 @@ int main(void) {
         sprintf(aux, "%d", bgpid);
         setenv("bgpid", aux, 1);
         free(aux);
+
         continue;
 
       } else {
@@ -197,6 +200,7 @@ int main(void) {
         } else {
           close(fd[0]);
           close(fd[1]);
+          es_hijo_bak = 1;
         }
       }
     }
@@ -397,10 +401,6 @@ int main(void) {
         dup(fd_reddirOUT);
       }
 
-      if (strcmp(argv[0], "exit") == 0) {
-
-        exit(0);
-      }
       if (strcmp(argv[0], "pwd") == 0) {
 
         char *aux = calloc(200, sizeof(char));
@@ -411,24 +411,24 @@ int main(void) {
 
       } else if (strcmp(argv[0], "cd") == 0) {
 
-        char *aux = calloc(200, sizeof(char));
-
         if (!argv[1]) {
-          aux = getenv("HOME");
+
+          if (chdir(getenv("HOME")) == -1) {
+            fprintf(stderr, "ERROR al buscar %s , no existe ese directorio \n",
+                    getenv("HOME"));
+          }
+          break;
         }
 
         else {
 
-          strcpy(aux, argv[1]);
-
-          if (chdir(aux) == -1) {
+          if (chdir(argv[1]) == -1) {
             fprintf(stderr, "ERROR al buscar %s , no existe ese directorio \n",
-                    aux);
-          }
-          free(aux);
-          break;
-        }
+                    argv[1]);
 
+            break;
+          }
+        }
       } else if (strcmp(argv[0], "umask") == 0) {
         int aux_int;
         if (!argv[1]) {
@@ -447,7 +447,6 @@ int main(void) {
 
           umask(aux_int);
         }
-
       } else if (strcmp(argv[0], "set") == 0) {
         alarm(2);
         if (!argv[1]) {
@@ -462,7 +461,7 @@ int main(void) {
               i++;
             } else {
               if (getenv(argv[i])) {
-                printf("%s\n", getenv(argv[i]));
+                printf("%s=%s\n", argv[i], getenv(argv[i]));
               } else {
                 printf("variable no declarada\n");
               }
@@ -471,7 +470,6 @@ int main(void) {
           }
         }
         alarm(0);
-
       } else if (strcmp(argv[0], "limit") == 0) {
         alarm(2);
         struct rlimit aux_lim;
@@ -565,5 +563,8 @@ int main(void) {
     dup(stdout_sav);
     close(STDERR);
     dup(stderr_sav);
+    if (es_hijo_bak) {
+      break;
+    }
   }
 }
