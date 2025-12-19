@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <bits/types/sigset_t.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <glob.h>
 #include <pwd.h>
 #include <signal.h>
@@ -287,6 +288,9 @@ int main(void) {
 
       if (sec)
         prevPipaSalida = pipa[0];
+      else {
+        prevPipaSalida = -1;
+      }
 
       sec = argvv[argvc + 1] != NULL;
       args = expandir(argv);
@@ -346,7 +350,51 @@ int main(void) {
             setenv("bgpid", tBuff, 1);
           }
         } else { /* Llamar en fg */
+          int fd;
+          if (filev[0]) {
+            fd = open(filev[0], O_RDONLY);
+            if (fd != -1) {
+              close(0);
+              dup(fd);
+              close(fd);
+            } else {
+              perror("open");
+              exit(1);
+            }
+          }
+          if (filev[1]) {
+            fd = creat(filev[1], 0666);
+            if (fd != -1) {
+              close(1);
+              dup(fd);
+              close(fd);
+            } else {
+              perror("creat");
+              exit(1);
+            }
+          }
+          if (filev[2]) {
+            fd = creat(filev[2], 0666);
+            if (fd != -1) {
+              close(2);
+              dup(fd);
+              close(fd);
+            } else {
+              perror("creat");
+              exit(1);
+            }
+          }
+
           status = acc[nf](*args);
+
+          close(0);
+          close(1);
+          close(2);
+
+          dup(fd0OG);
+          dup(fd1OG);
+          dup(fd2OG);
+
           char *tBuff;
           Autosprintf(tBuff, "%d", status);
           setenv("status", tBuff, 1);
@@ -374,7 +422,51 @@ int main(void) {
             sigset_t mProc;
             sigemptyset(&mProc);
             sigprocmask(SIG_SETMASK, &mProc, NULL);
+            int fd;
+            if (filev[0]) {
+              fd = open(filev[0], O_RDONLY);
+              if (fd != -1) {
+                close(0);
+                dup(fd);
+                close(fd);
+              } else {
+                perror("open");
+                exit(1);
+              }
+            }
+            if (filev[1]) {
+              fd = creat(filev[1], 0666);
+              if (fd != -1) {
+                close(1);
+                dup(fd);
+                close(fd);
+              } else {
+                perror("creat");
+                exit(1);
+              }
+            }
+            if (filev[2]) {
+              fd = creat(filev[2], 0666);
+              if (fd != -1) {
+                close(2);
+                dup(fd);
+                close(fd);
+              } else {
+                perror("creat");
+                exit(1);
+              }
+            }
+
             status = acc[nf](*args);
+
+            close(0);
+            close(1);
+            close(2);
+
+            dup(fd0OG);
+            dup(fd1OG);
+            dup(fd2OG);
+
             exit(status);
           }
         } else { /* msh */
