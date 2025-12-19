@@ -20,6 +20,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <pwd.h>
 #include <stddef.h> /* NULL */
 #include <stdio.h>  /* setbuf, printf */
 #include <stdlib.h>
@@ -46,7 +47,7 @@ char *commands = {"cd"};
   {                                                                            \
     int AUTOSPRINTF = snprintf(NULL, 0, msg, __VA_ARGS__);                     \
     buff = malloc((AUTOSPRINTF + 1) * sizeof(char));                           \
-    snprintf(buff, AUTOSPRINTF, msg, __VA_ARGS__);                             \
+    snprintf(buff, AUTOSPRINTF + 1, msg, __VA_ARGS__);                         \
   }
 
 typedef struct {
@@ -67,8 +68,7 @@ int strCont(char *str, char cont) {
 
 /* TODO: Change this, it isn't needed in this form */
 int necesitaExpasion(char *str) {
-  if (str[0] == '~' || strCont(str, '\\') > -1 || strCont(str, '?') > -1 ||
-      strCont(str, '$') > -1)
+  if (str[0] == '~' || strCont(str, '?') > -1 || strCont(str, '$') > -1)
     return 1;
   return 0;
 }
@@ -103,19 +103,55 @@ char *getsVarName(char *str) {
   }
   return rest;
 }
-void expandirTilde(char **sMod) { assert(0 && "Implement expandirTilde"); }
-void expandirVar(char **sMod) { assert(0 && "Implement expandirVar"); }
+void expandirTilde(char **sMod) {
+  if (*(sMod)[0] == '~') {
+    char *userName = getsVarName(&sMod[0][1]);
+    char *dir;
+    char *res;
+    if (strcmp(userName, "") == 0) {
+      char *sub = getenv("HOME");
+      if (sub != NULL) {
+        dir = sub;
+      } else {
+        dir = "";
+      }
+    } else {
+      struct passwd pwd;
+      struct passwd *result;
+      char buff[2048];
+      errno = 0;
+      getpwnam_r(userName, &pwd, buff, sizeof(buff), &result);
+      if (errno != 0) {
+        perror("getpwnam_r");
+      } else if (result == NULL) {
+        dir = "";
+      } else {
+        dir = result->pw_dir;
+      }
+    }
+    int offset = strlen(userName);
+    Autosprintf(res, "%s%s", dir, &sMod[0][offset + 1]);
+    free(*sMod);
+    *sMod = res;
+  }
+}
+void expandirVar(char **sMod) {
+  int pos;
+  while ((pos = strCont(*sMod, '$')) > -1) {
+  }
+}
 void expandirWildcard(expand *res, char **sMod) {
   assert(0 && "Implement expandirWildcard");
 }
 expand *expandir(char **str) {
   expand *res = calloc(1, sizeof(expand));
-  for (char *s = *str; s != NULL; s = *(str + 1)) {
+  for (char *s = *str; s != NULL; s++) {
     char *sMod = strdup(s);
     if (!necesitaExpasion(s)) {
       addExpasion(res, sMod); /* NO necesita expansión, se añade tal cual */
     } else {
       expandirTilde(&sMod);
+      printf("%s", sMod);
       expandirVar(&sMod);
       expandirWildcard(res, &sMod);
     }
@@ -216,32 +252,10 @@ int main(void) {
     argvc = ret - 1; /* Line */
     if (argvc == 0)
       continue; /* Empty line */
-#if 0
-    /*
-     * LAS LINEAS QUE A CONTINUACION SE PRESENTAN SON SOLO
-     * PARA DAR UNA IDEA DE COMO UTILIZAR LAS ESTRUCTURAS
-     * argvv Y filev. ESTAS LINEAS DEBERAN SER ELIMINADAS.
-     */
-    for (argvc = 0; (argv = argvv[argvc]); argvc++) {
-      for (argc = 0; argv[argc]; argc++)
-        printf("%s ", argv[argc]);
-      printf("\n");
-    }
-    if (filev[0])
-      printf("< %s\n", filev[0]); /* IN */
-    if (filev[1])
-      printf("> %s\n", filev[1]); /* OUT */
-    if (filev[2])
-      printf(">& %s\n", filev[2]); /* ERR */
-    if (bg)
-      printf("&\n");
-/*
- * FIN DE LA PARTE A ELIMINAR
- */
-#endif
 
     for (argvc = 0; (argv = argvv[argvc]); argvc++) {
       for (argc = 0; argv[argc]; argc++) {
+        expandir(argv);
         if (strcmp("cd", argv[argc]) == 0) {
           printf("CD EMPEZANDO");
           if (cd(argv[argc + 1]) == -1) {
@@ -273,6 +287,7 @@ int main(void) {
       printf("&\n");
     /* char *ret = getsVarName(filev[0]); */
     /* printf("%s", ret); */
+    /* TODO: Free expandir*/
   }
   exit(0);
   return 0;
