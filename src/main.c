@@ -29,6 +29,8 @@
 #include <stdio.h>  /* setbuf, printf */
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -228,6 +230,9 @@ void pArgsAll() {
   }
 }
 
+void pLimtsAll() {}
+void setLimit() {}
+
 int cd(expand args) {
   if (args.size - 1 == 1) {
     char *dir = getenv("HOME");
@@ -238,7 +243,7 @@ int cd(expand args) {
   } else if (args.size - 1 == 2) {
     return chdir(args.argsExp[1]);
   } else {
-    perror("cd: Too many args\n");
+    fprintf(stderr, "cd: Too many args\n");
     return 1;
   }
 }
@@ -258,14 +263,44 @@ int set(expand args) {
     setenv(args.argsExp[1], args.argsExp[2], 1);
     return 0;
   } else {
-    perror("set: Too many args\n");
+    fprintf(stderr, "set: Too many args\n");
     return 1;
   }
 }
 
-int umask(expand args) { assert(0 && "TODO: Implement umask"); }
+int umaskf(expand args) {
+  if (args.size - 1 == 1) {
+    mode_t m = umask(0);
+    umask(m);
+    printf("%o\n", m);
+    return 0;
+  } else if (args.size - 1 == 2) {
+    int o = strtol(args.argsExp[1], NULL, 8);
+    mode_t m = umask(o);
+    printf("%o\n", m);
+    return 0;
+  } else {
+    fprintf(stderr, "limit: Too many args\n");
+    return 1;
+  }
+}
 
-int limit(expand args) { assert(0 && "TODO: Implement limit"); }
+int limit(expand args) {
+
+  if (args.size - 1 == 1) {
+    pLimtsAll();
+    return 0;
+  } else if (args.size - 1 == 2) {
+    fprintf(stderr, "limit: Too few args\n");
+    return 1;
+  } else if (args.size - 1 == 3) {
+    setLimit();
+    return 0;
+  } else {
+    fprintf(stderr, "limit: Too many args\n");
+    return 1;
+  }
+}
 
 int gen(expand args) { return execvp(args.argsExp[0], args.argsExp); }
 
@@ -279,7 +314,7 @@ void setIniVars() {
   setenv("status", "0", 1);
 }
 
-int (*acc[5])(expand) = {&cd, &set, &umask, &limit, &gen};
+int (*acc[5])(expand) = {&cd, &set, &umaskf, &limit, &gen};
 
 int main(void) {
 
