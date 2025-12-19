@@ -189,6 +189,7 @@ void expandirWildcard(expand *res, char *sMod) {
       }
     }
     globfree(gRes);
+    addExpasion(res, NULL);
   }
 }
 expand *expandir(char **str) {
@@ -207,18 +208,51 @@ expand *expandir(char **str) {
   return res;
 }
 
-int cd(expand args) { assert(0 && "TODO: Implement cd"); }
-int set(expand args) { assert(0 && "TODO: Implement set"); }
-int umask(expand args) { assert(0 && "TODO: Implement umask"); }
-int limit(expand args) { assert(0 && "TODO: Implement limit"); }
-int gen(expand args) { assert(0 && "TODO: Implement gen"); }
-
 void pArgsAll() {
   char **cursor = environ;
   while (*cursor) {
     printf("%s\n", *cursor++);
   }
 }
+
+int cd(expand args) {
+  if (args.size - 1 == 1) {
+    char *dir = getenv("HOME");
+    if (dir != NULL) {
+      return chdir(dir);
+    }
+    return 0;
+  } else if (args.size - 1 == 2) {
+    return chdir(args.argsExp[1]);
+  } else {
+    perror("cd: Too many args\n");
+    return 1;
+  }
+}
+
+int set(expand args) {
+  if (args.size - 1 == 1) {
+    pArgsAll();
+    return 0;
+  } else if (args.size - 1 == 2) {
+    char *res = getenv(args.argsExp[1]);
+    if (res == NULL)
+      pArgsAll();
+    else
+      printf("%s=%s\n", args.argsExp[1], res);
+    return 0;
+  } else if (args.size - 1 == 3) {
+    setenv(args.argsExp[1], args.argsExp[2], 1);
+    return 0;
+  } else {
+    perror("set: Too many args\n");
+    return 1;
+  }
+}
+
+int umask(expand args) { assert(0 && "TODO: Implement umask"); }
+int limit(expand args) { assert(0 && "TODO: Implement limit"); }
+int gen(expand args) { return execvp(args.argsExp[0], args.argsExp); }
 
 void setIniVars() {
   setenv("prompt", "msh >", 1);
@@ -317,9 +351,6 @@ int main(void) {
           perror("pipe");
           return 1;
         }
-      } else {
-
-        /* TODO: Implementar redirección de entradas y salidas y tal */
       }
 
       if (nf < 4) {      /* Internal */
@@ -336,6 +367,14 @@ int main(void) {
               perror("fork");
               return 1;
             } else if (nieto == 0) { /* Nieto */
+              if (prevPipaSalida != -1) {
+                close(0);
+                dup(prevPipaSalida);
+              }
+              if (sec) {
+                close(1);
+                dup(pipa[1]);
+              }
               acc[nf](*args);
               exit(0);
             } else { /* HijoSac */
@@ -399,7 +438,7 @@ int main(void) {
           Autosprintf(tBuff, "%d", status);
           setenv("status", tBuff, 1);
         }
-      } else { /* external*/
+      } else { /* external */
         hijoSac = fork();
 
         if (hijoSac == -1) {
@@ -412,6 +451,14 @@ int main(void) {
               perror("fork");
               return 1;
             } else if (nieto == 0) { /* nieto */
+              if (prevPipaSalida != -1) {
+                close(0);
+                dup(prevPipaSalida);
+              }
+              if (sec) {
+                close(1);
+                dup(pipa[1]);
+              }
               acc[nf](*args);
               exit(0);
             } else { /* hijoSac*/
