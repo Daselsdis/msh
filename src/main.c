@@ -131,27 +131,46 @@ int main(void) {
     int fd, fd_reddirIN, fd_reddirOUT, fd_reddirERR;
     if (filev[0]) {
       fd = open(filev[0], O_RDONLY);
-      close(0);
-      dup(fd);
-      fd_reddirIN = fd;
+      if (fd != -1) {
+        close(0);
+        dup(fd);
+        fd_reddirIN = fd;
+      } else {
+        perror("ERROR reddir_stdin");
+        continue;
+      }
     } else {
       fd_reddirIN = stdin_sav;
     }
 
     if (filev[1]) {
       fd = creat(filev[1], 0666);
-      close(1);
-      dup(fd);
-      fd_reddirOUT = fd;
+      if (fd != -1) {
+
+        close(1);
+        dup(fd);
+        fd_reddirOUT = fd;
+      } else {
+        perror("ERROR reddir_stdout");
+        continue;
+      }
+
     } else {
       fd_reddirOUT = stdout_sav;
     }
 
     if (filev[2]) {
       fd = creat(filev[2], 0666);
-      close(2);
-      dup(fd);
-      fd_reddirERR = fd;
+      if (fd != -1) {
+
+        close(2);
+        dup(fd);
+        fd_reddirERR = fd;
+      } else {
+        perror("ERROR reddir_stderr");
+        continue;
+      }
+
     } else {
       fd_reddirERR = stderr_sav;
     }
@@ -401,22 +420,23 @@ int main(void) {
         dup(fd_reddirOUT);
       }
 
-      if (strcmp(argv[0], "pwd") == 0) {
+      if (strcmp(argv[0], "cd") == 0) {
 
-        char *aux = calloc(200, sizeof(char));
-
-        getcwd(aux, 200);
-        printf("Current working directory: %s \n", aux);
-        free(aux);
-
-      } else if (strcmp(argv[0], "cd") == 0) {
+        char *aux;
 
         if (!argv[1]) {
 
+          char *aux;
           if (chdir(getenv("HOME")) == -1) {
             fprintf(stderr, "ERROR al buscar %s , no existe ese directorio \n",
                     getenv("HOME"));
           }
+          aux = calloc(1000, sizeof(char));
+
+          getcwd(aux, 1000);
+          printf("%s\n", aux);
+          free(aux);
+
           break;
         }
 
@@ -425,21 +445,28 @@ int main(void) {
           if (chdir(argv[1]) == -1) {
             fprintf(stderr, "ERROR al buscar %s , no existe ese directorio \n",
                     argv[1]);
-
-            break;
           }
+          aux = calloc(1000, sizeof(char));
+
+          getcwd(aux, 1000);
+          printf("%s\n", aux);
+          free(aux);
+
+          break;
         }
       } else if (strcmp(argv[0], "umask") == 0) {
         int aux_int;
         if (!argv[1]) {
           aux_int = umask(0);
-          printf("%o \n", aux_int);
+          printf("%o\n", aux_int);
           aux_int = umask(aux_int);
 
         } else {
-          aux_int = strtol(argv[1], NULL, 8);
+          char *c_end;
+          aux_int = strtol(argv[1], &c_end, 8);
 
-          if (errno == ERANGE || !(aux_int >= 0 && aux_int <= 0x777)) {
+          if (*c_end != '\0' || errno == ERANGE ||
+              !(aux_int >= 0 && aux_int <= 0777)) {
 
             fprintf(stderr, "mascara \" %s \" invalida \n", argv[1]);
             break;
@@ -481,8 +508,7 @@ int main(void) {
               fprintf(stderr, "ERROR recurso no encontrado \n");
             } else {
               getrlimit(tipo_recurso(resources[i]), aux);
-              fprintf(stdout, "%s\t%ld", resources[i], aux->rlim_max);
-              fprintf(stdout, "\n");
+              fprintf(stdout, "%s\t%d\n", resources[i], (int)aux->rlim_max);
             }
           }
 
@@ -517,8 +543,7 @@ int main(void) {
               } else {
                 if (getrlimit(tipo_recurso(argv[i]), aux) == 0) {
 
-                  fprintf(stdout, "%s\t%ld,  %d \n", argv[i],
-                          (long)aux->rlim_max, tipo_recurso(argv[i]));
+                  fprintf(stdout, "%s\t%d\n", argv[i], (int)aux->rlim_max);
                 }
 
                 else {
