@@ -103,6 +103,7 @@ void freeExpansion(expand *exp) {
     free(exp->argsExp[i]);
   }
   free(exp->argsExp);
+  free(exp);
 }
 
 char *getsVarName(char *str) {
@@ -190,8 +191,7 @@ void expandirWildcard(expand *res, char *sMod) {
     addExpasion(res, sMod);
   } else {
     glob_t *gRes;
-    int r;
-    glob(sMod, 0, NULL, gRes);
+    int r = glob(sMod, 0, NULL, gRes);
     if (r == GLOB_NOMATCH) {
       addExpasion(res, sMod);
     } else if (r != 0) {
@@ -437,6 +437,7 @@ int main(void) {
             char *tBuff;
             Autosprintf(tBuff, "%d", nieto);
             setenv("bgpid", tBuff, 1);
+            free(tBuff);
           }
         } else { /* Llamar en fg */
           int fd;
@@ -487,6 +488,7 @@ int main(void) {
           char *tBuff;
           Autosprintf(tBuff, "%d", status);
           setenv("status", tBuff, 1);
+          free(tBuff);
         }
       } else { /* external */
         hijoSac = fork();
@@ -569,15 +571,15 @@ int main(void) {
         } else { /* msh */
           int rets;
           wait(&rets);
+          char *tBuff;
           if (bg || sec) {
-            char *tBuff;
             Autosprintf(tBuff, "%d", rets);
             setenv("bgpid", tBuff, 1);
           } else {
-            char *tBuff;
             Autosprintf(tBuff, "%d", rets);
             setenv("status", tBuff, 1);
           }
+          free(tBuff);
         }
       }
 
