@@ -435,7 +435,7 @@ int main(void) {
           } else { /* msh */
             wait(&bgpid);
             char *tBuff;
-            Autosprintf(tBuff, "%d", nieto);
+            Autosprintf(tBuff, "%d", bgpid);
             setenv("bgpid", tBuff, 1);
             free(tBuff);
           }
