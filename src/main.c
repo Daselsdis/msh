@@ -54,25 +54,21 @@ typedef struct {
   char **argsExp;
 } expand;
 
-int strContN(char *str, char cont, int skip) {
-  int res = 0, tempRes, i, j, lenStr = strlen(str), skipped = 0;
+int strCont(char *str, char cont) {
+
+  int res = 0, tempRes, i, j, lenStr = strlen(str);
 
   for (i = 0; i < lenStr && !res; i++) {
     res = str[i] == cont;
-    if (res && skipped < skip) {
-      res = 0;
-      skipped++;
-    }
   }
+
   return !res ? i : -1;
 }
 
 /* TODO: Change this, it isn't needed in this form */
-int necesitaExpasion(char *str, int nOmitBackslash, int nOmitQuestionMark,
-                     int nOmitDollar) {
-  if (str[0] == '~' || strContN(str, '\\', nOmitBackslash) > -1 ||
-      strContN(str, '?', nOmitQuestionMark) > -1 ||
-      strContN(str, '$', nOmitDollar) > -1)
+int necesitaExpasion(char *str) {
+  if (str[0] == '~' || strCont(str, '\\') > -1 || strCont(str, '?') > -1 ||
+      strCont(str, '$') > -1)
     return 1;
   return 0;
 }
@@ -108,42 +104,20 @@ char *getsVarName(char *str) {
   return rest;
 }
 void expandirTilde(char **sMod) { assert(0 && "Implement expandirTilde"); }
-
+void expandirVar(char **sMod) { assert(0 && "Implement expandirVar"); }
+void expandirWildcard(expand *res, char **sMod) {
+  assert(0 && "Implement expandirWildcard");
+}
 expand *expandir(char **str) {
   expand *res = calloc(1, sizeof(expand));
-
   for (char *s = *str; s != NULL; s = *(str + 1)) {
     char *sMod = strdup(s);
-    if (!necesitaExpasion(s, 0, 0, 0)) {
-      addExpasion(res, s); /* NO necesita expansión, se añade tal cual */
+    if (!necesitaExpasion(s)) {
+      addExpasion(res, sMod); /* NO necesita expansión, se añade tal cual */
     } else {
-      int nOmitDollar = 0, nOmitBackslash = 0, nOmitQuestionMark = 0;
       expandirTilde(&sMod);
-      do {
-        // expandirDolar(s,)
-      } while (
-          necesitaExpasion(s, nOmitBackslash, nOmitQuestionMark, nOmitDollar));
-    }
-
-    if (!necesitaExpasion(str)) {
-      if (!addExpasion(res, str))
-        assert(0 && "ERROR AÑADIENDO A EXPAND");
-      /* TODO: Manejo al fallo en expansión, maybe*/
-      return res;
-    }
-    int pos = strContN(str, '$', 0);
-    if (pos == 0 || (pos > 0 && str[pos - 1] != '\\')) {
-      char *var = getsVarName(&str[pos]);
-    }
-
-    if (str[0] == '~') {
-      char *dir = getenv("HOME");
-      if (dir != NULL) {
-        strcat(dir, &str[1]);
-      } else
-        assert(0 && "$HOME VAR NOT SET");
-      /* TODO: Usar size negativo para errores en la expansión (p.e. size -1
-       * no $HOME), por tanto liberar res.argsExp*/
+      expandirVar(&sMod);
+      expandirWildcard(res, &sMod);
     }
   }
 
@@ -160,6 +134,7 @@ void pArgsAll() {
   }
 }
 
+/* TODO: Implementar set para tomar expand*/
 int set(char *name, char *val) {
   if (val == NULL) {
     if (name == NULL)
@@ -177,8 +152,8 @@ int set(char *name, char *val) {
   return 0;
 }
 
-int changeDir(char *path) { return 0; }
-
+/*int changeDir(char *path) { return 0; }*/
+/* TODO: Implementar cd para tomar expand*/
 int cd(char *args) {
   char *dir;
   if (args == NULL) { /* NOT passed a dir, $HOME */
@@ -203,6 +178,7 @@ int cd(char *args) {
   }
   return -1;
 }
+
 void setIniVars() {
   setenv("prompt", "msh >", 1);
   char *Tbuff;
@@ -212,10 +188,7 @@ void setIniVars() {
   setenv("bgpid", "-1", 1);
   setenv("status", "0", 1);
 }
-/* TODO: Implementar que si un mandato termina en "\\", se considera error si
- * no hay otro mandato siguiendo "\ ", que el parser corta por el espacio, por
- * ahora no se implementa, pero se puede confacilidad, el resto del proceso
- * debería ser compatible  por defecto.*/
+
 int main(void) {
   char ***argvv = NULL;
   int argvc;
