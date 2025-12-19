@@ -57,13 +57,13 @@ typedef struct {
 
 int strCont(char *str, char cont) {
 
-  int res = 0, tempRes, i, j, lenStr = strlen(str);
+  int res = 0, i, lenStr = strlen(str);
 
   for (i = 0; i < lenStr && !res; i++) {
     res = str[i] == cont;
   }
 
-  return !res ? i : -1;
+  return res != 0 ? i : -1;
 }
 
 /* TODO: Change this, it isn't needed in this form */
@@ -126,7 +126,7 @@ void expandirTilde(char **sMod) {
       } else if (result == NULL) {
         dir = "";
       } else {
-        dir = result->pw_dir;
+        dir = strdup(result->pw_dir);
       }
     }
     int offset = strlen(userName);
@@ -137,7 +137,33 @@ void expandirTilde(char **sMod) {
 }
 void expandirVar(char **sMod) {
   int pos;
-  while ((pos = strCont(*sMod, '$')) > -1) {
+  /* int len = strlen(sMod[0]); */
+  char *varName;
+  char *pre;
+  char *val;
+  char *sub;
+  char *res;
+  while ((pos = strCont(*sMod, '$')) && pos > -1) {
+    pre = malloc((pos + 1) * sizeof(char));
+    snprintf(pre, pos, "%s", *sMod);
+    /* strncpy(*sMod, pre, pos - 1); */
+    /* pre[pos] = '\0'; */
+
+    varName = getsVarName(&sMod[0][pos]);
+    if (strcmp(varName, "") == 0) {
+      sub = "";
+    } else {
+      val = getenv(varName);
+      if (val == NULL)
+        sub = "";
+      else
+        sub = val;
+    }
+
+    int offset = strlen(varName);
+    Autosprintf(res, "%s%s%s", pre, sub, &sMod[0][pos + offset]);
+    free(*sMod);
+    *sMod = res;
   }
 }
 void expandirWildcard(expand *res, char **sMod) {
@@ -151,7 +177,6 @@ expand *expandir(char **str) {
       addExpasion(res, sMod); /* NO necesita expansión, se añade tal cual */
     } else {
       expandirTilde(&sMod);
-      printf("%s", sMod);
       expandirVar(&sMod);
       expandirWildcard(res, &sMod);
     }
