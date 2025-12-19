@@ -83,13 +83,24 @@ int addExpasion(expand *exp, char *str) {
   exp->argsExp = realloc(exp->argsExp, exp->size * sizeof(char *));
   if (exp->argsExp == NULL)
     return 0;
-  int strLen = strlen(str);
-  exp->argsExp[exp->size - 1] = malloc((strLen + 1) * sizeof(char));
-  if (exp->argsExp[exp->size - 1] == NULL)
-    return 0;
-  memcpy(exp->argsExp[exp->size - 1], str, strLen);
-  exp->argsExp[exp->size - 1][strLen] = '\0';
+  if (str == NULL) {
+    exp->argsExp[exp->size - 1] = NULL;
+  } else {
+    int strLen = strlen(str);
+    exp->argsExp[exp->size - 1] = malloc((strLen + 1) * sizeof(char));
+    if (exp->argsExp[exp->size - 1] == NULL)
+      return 0;
+    memcpy(exp->argsExp[exp->size - 1], str, strLen);
+    exp->argsExp[exp->size - 1][strLen] = '\0';
+  }
   return 1;
+}
+
+void freeExpansion(expand *exp) {
+  for (int i = 0; i < exp->size; i++) {
+    free(exp->argsExp[i]);
+  }
+  free(exp->argsExp);
 }
 
 char *getsVarName(char *str) {
@@ -189,12 +200,12 @@ void expandirWildcard(expand *res, char *sMod) {
       }
     }
     globfree(gRes);
-    addExpasion(res, NULL);
   }
 }
 expand *expandir(char **str) {
   expand *res = calloc(1, sizeof(expand));
-  for (char *s = *str; s != NULL; s++) {
+  char *s;
+  for (int i = 0; (s = str[i]); i++) {
     char *sMod = strdup(s);
     if (!necesitaExpasion(s)) {
       addExpasion(res, sMod); /* NO necesita expansión, se añade tal cual */
@@ -203,8 +214,10 @@ expand *expandir(char **str) {
       expandirVar(&sMod);
       expandirWildcard(res, sMod);
     }
+    free(sMod);
   }
 
+  addExpasion(res, NULL);
   return res;
 }
 
@@ -251,7 +264,9 @@ int set(expand args) {
 }
 
 int umask(expand args) { assert(0 && "TODO: Implement umask"); }
+
 int limit(expand args) { assert(0 && "TODO: Implement limit"); }
+
 int gen(expand args) { return execvp(args.argsExp[0], args.argsExp); }
 
 void setIniVars() {
@@ -552,6 +567,7 @@ int main(void) {
       /* } */
       /* printf("%s\n", argv[argc]); */
       /* printf("Hasta aquí argv %d\n", argvc); */
+      freeExpansion(args);
     }
     if (filev[0])
       printf("< %s\n", filev[0]); /* IN */
