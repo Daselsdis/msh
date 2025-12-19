@@ -370,15 +370,6 @@ int main(void) {
 
     for (argvc = 0; (argv = argvv[argvc]); argvc++) {
 
-      if (sec)
-        prevPipaSalida = pipa[0];
-      else {
-        prevPipaSalida = -1;
-      }
-
-      sec = argvv[argvc + 1] != NULL;
-      args = expandir(argv);
-
       if (strcmp("cd", argv[0]) == 0) {
         /* acc = &cd; */
         nf = 0;
@@ -395,6 +386,15 @@ int main(void) {
         /* acc = &gen; */
         nf = 4;
       }
+
+      if (sec)
+        prevPipaSalida = pipa[0];
+      else {
+        prevPipaSalida = -1;
+      }
+
+      sec = argvv[argvc + 1] != NULL;
+      args = expandir(argv);
 
       if (sec) {
         if (pipe(pipa) < 0) {
@@ -440,6 +440,14 @@ int main(void) {
             free(tBuff);
           }
         } else { /* Llamar en fg */
+          if (prevPipaSalida != -1) {
+            close(0);
+            dup(prevPipaSalida);
+          }
+          if (sec) {
+            close(1);
+            dup(pipa[1]);
+          }
           int fd;
           if (filev[0]) {
             fd = open(filev[0], O_RDONLY);
@@ -521,6 +529,14 @@ int main(void) {
             sigset_t mProc;
             sigemptyset(&mProc);
             sigprocmask(SIG_SETMASK, &mProc, NULL);
+            if (prevPipaSalida != -1) {
+              close(0);
+              dup(prevPipaSalida);
+            }
+            if (sec) {
+              close(1);
+              dup(pipa[1]);
+            }
             int fd;
             if (filev[0]) {
               fd = open(filev[0], O_RDONLY);
