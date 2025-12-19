@@ -230,18 +230,69 @@ void pArgsAll() {
   }
 }
 
-void pLimtsAll() {}
-void setLimit() {}
+void pLimtsAll() {
+  struct rlimit *l = malloc(sizeof(struct rlimit));
+  getrlimit(RLIMIT_CPU, l);
+  printf("cpu\t%ld\n", l->rlim_cur);
+  getrlimit(RLIMIT_FSIZE, l);
+  printf("fsize\t%ld\n", l->rlim_cur);
+  getrlimit(RLIMIT_DATA, l);
+  printf("data\t%ld\n", l->rlim_cur);
+  getrlimit(RLIMIT_STACK, l);
+  printf("stack\t%ld\n", l->rlim_cur);
+  getrlimit(RLIMIT_NOFILE, l);
+  printf("nofile\t%ld\n", l->rlim_cur);
+  getrlimit(RLIMIT_CORE, l);
+  printf("core\t%ld\n", l->rlim_cur);
+  free(l);
+}
+int setLimit(char *ref, char *val) {
+  int cod;
+  if (strcmp(ref, "cpu") == 0) {
+    cod = RLIMIT_CPU;
+  } else if (strcmp(ref, "fsize") == 0) {
+    cod = RLIMIT_FSIZE;
+  } else if (strcmp(ref, "data") == 0) {
+    cod = RLIMIT_DATA;
+  } else if (strcmp(ref, "stack") == 0) {
+    cod = RLIMIT_STACK;
+  } else if (strcmp(ref, "core") == 0) {
+    cod = RLIMIT_CORE;
+  } else if (strcmp(ref, "nofile") == 0) {
+    cod = RLIMIT_NOFILE;
+  } else {
+    return 1;
+  }
+  struct rlimit *l = malloc(sizeof(struct rlimit));
+  if (val == NULL) {
+    getrlimit(cod, l);
+    printf("%s\t%ld\n", ref, l->rlim_cur);
+  } else {
+    int lim = strtol(val, NULL, 10);
+    getrlimit(cod, l);
+    l->rlim_cur = lim;
+    setrlimit(cod, l);
+  }
+  free(l);
+  return 0;
+}
 
 int cd(expand args) {
   if (args.size - 1 == 1) {
     char *dir = getenv("HOME");
     if (dir != NULL) {
+      printf("%s\n", dir);
       return chdir(dir);
     }
     return 0;
   } else if (args.size - 1 == 2) {
-    return chdir(args.argsExp[1]);
+    int res = chdir(args.argsExp[1]);
+    if (res == 0) {
+      char *pos = getcwd(NULL, 0);
+      printf("%s\n", pos);
+      free(pos);
+    }
+    return res;
   } else {
     fprintf(stderr, "cd: Too many args\n");
     return 1;
@@ -291,10 +342,10 @@ int limit(expand args) {
     pLimtsAll();
     return 0;
   } else if (args.size - 1 == 2) {
-    fprintf(stderr, "limit: Too few args\n");
-    return 1;
+    setLimit(args.argsExp[1], args.argsExp[2]);
+    return 0;
   } else if (args.size - 1 == 3) {
-    setLimit();
+    setLimit(args.argsExp[1], args.argsExp[2]);
     return 0;
   } else {
     fprintf(stderr, "limit: Too many args\n");
@@ -341,7 +392,7 @@ int main(void) {
   setIniVars();
 
   expand *args;
-  int pipa[2];
+  /* int pipa[2]; */
   int prevPipaSalida;
   int sec;
   pid_t hijoSac, nieto, bgpid;
@@ -367,6 +418,7 @@ int main(void) {
       continue; /* Empty line */
 
     sec = 0;
+    int pipa[2] = {-1, -1};
 
     for (argvc = 0; (argv = argvv[argvc]); argvc++) {
 
@@ -401,6 +453,9 @@ int main(void) {
           perror("pipe");
           return 1;
         }
+      } else {
+        pipa[0] = -1;
+        pipa[1] = -1;
       }
 
       if (nf < 4) {      /* Internal */
@@ -420,14 +475,23 @@ int main(void) {
               if (prevPipaSalida != -1) {
                 close(0);
                 dup(prevPipaSalida);
+                close(prevPipaSalida);
               }
               if (sec) {
                 close(1);
                 dup(pipa[1]);
+                close(pipa[1]);
               }
               acc[nf](*args);
               exit(0);
-            } else { /* HijoSac */
+            } else {                      /* HijoSac */
+              if (prevPipaSalida != -1) { /* Idk bt this one */
+                close(prevPipaSalida);
+              }
+              if (sec) {
+                close(pipa[0]);
+                close(pipa[1]);
+              }
               printf("[%d]\n", nieto);
               exit(nieto);
             }
@@ -435,6 +499,12 @@ int main(void) {
           } else { /* msh */
             wait(&bgpid);
             char *tBuff;
+            if (prevPipaSalida != -1) {
+              close(prevPipaSalida);
+            }
+            if (sec) {
+              close(pipa[1]);
+            }
             Autosprintf(tBuff, "%d", bgpid);
             setenv("bgpid", tBuff, 1);
             free(tBuff);
@@ -443,10 +513,12 @@ int main(void) {
           if (prevPipaSalida != -1) {
             close(0);
             dup(prevPipaSalida);
+            close(prevPipaSalida);
           }
           if (sec) {
             close(1);
             dup(pipa[1]);
+            close(pipa[1]);
           }
           int fd;
           if (filev[0]) {
@@ -514,14 +586,23 @@ int main(void) {
               if (prevPipaSalida != -1) {
                 close(0);
                 dup(prevPipaSalida);
+                close(prevPipaSalida);
               }
               if (sec) {
                 close(1);
                 dup(pipa[1]);
+                close(pipa[1]);
               }
               acc[nf](*args);
               exit(0);
-            } else { /* hijoSac*/
+            } else {                      /* hijoSac*/
+              if (prevPipaSalida != -1) { /* Idk bt this one */
+                close(prevPipaSalida);
+              }
+              if (sec) {
+                close(pipa[0]);
+                close(pipa[1]);
+              }
               printf("[%d]\n", nieto);
               exit(nieto);
             }
@@ -532,10 +613,12 @@ int main(void) {
             if (prevPipaSalida != -1) {
               close(0);
               dup(prevPipaSalida);
+              close(prevPipaSalida);
             }
             if (sec) {
               close(1);
               dup(pipa[1]);
+              close(pipa[1]);
             }
             int fd;
             if (filev[0]) {
@@ -587,6 +670,12 @@ int main(void) {
         } else { /* msh */
           int rets;
           wait(&rets);
+          if (prevPipaSalida != -1) {
+            close(prevPipaSalida);
+          }
+          if (sec) {
+            close(pipa[1]);
+          }
           char *tBuff;
           if (bg || sec) {
             Autosprintf(tBuff, "%d", rets);
@@ -598,42 +687,10 @@ int main(void) {
           free(tBuff);
         }
       }
-
-      /* for (argc = 0; argv[argc]; argc++) { */
-      /*   if (strcmp("cd", argv[argc]) == 0) { */
-      /*     printf("CD EMPEZANDO"); */
-      /*     if (cd(argv[argc + 1]) == -1) { */
-      /*       perror("Error in cd execution: "); */
-      /*     } */
-      /*   } else if (strcmp("set", argv[argc]) == 0) { */
-      /**/
-      /*     printf("%s", argv[argc]); */
-      /*     printf("%s\n", argv[argc + 1]); */
-      /*     printf("%s\n", argv[argc + 2]); */
-      /*     printf("%s", argv[argc]); */
-      /*     printf("%s", argv[argc + 1]); */
-      /*     if (argv[argc + 1] == NULL) */
-      /*       set(NULL, NULL); */
-      /*     else */
-      /*       set(argv[argc + 1], argv[argc + 2]); */
-      /*   } */
-      /* } */
-      /* printf("%s\n", argv[argc]); */
-      /* printf("Hasta aquí argv %d\n", argvc); */
       freeExpansion(args);
     }
-    if (filev[0])
-      printf("< %s\n", filev[0]); /* IN */
-    if (filev[1])
-      printf("> %s\n", filev[1]); /* OUT */
-    if (filev[2])
-      printf(">& %s\n", filev[2]); /* ERR */
-    if (bg)
-      printf("&\n");
-    /* char *ret = getsVarName(filev[0]); */
-    /* printf("%s", ret); */
-    /* TODO: Free expandir*/
   }
+  printf("\n");
   exit(0);
   return 0;
 }
