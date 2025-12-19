@@ -282,10 +282,16 @@ int main(void) {
 
   setIniVars();
 
+  void (*acc)(expand);
+  expand *args;
+
   while (1) {
 
     char *prompt = getenv("prompt");
-
+    if (prompt == NULL) {
+      /* I don't think this is possible, but yk, just in case*/
+      prompt = "";
+    }
     fprintf(stderr, "%s", prompt); /* Prompt */
     ret = obtain_order(&argvv, filev, &bg);
     if (ret == 0)
@@ -297,8 +303,35 @@ int main(void) {
       continue; /* Empty line */
 
     for (argvc = 0; (argv = argvv[argvc]); argvc++) {
+      args = expandir(argv);
+      if (strcmp("cd", argv[0]) == 0) {
+        /* acc = &cd; */
+      } else if (strcmp("set", argv[0]) == 0) {
+        /* acc = &set; */
+      } else if (strcmp("umask", argv[0]) == 0) {
+        /* acc = &umask; */
+      } else if (strcmp("limit", argv[0]) == 0) {
+        /* acc = &limit; */
+      } else {
+        /* acc = &gen; */
+      }
+
       for (argc = 0; argv[argc]; argc++) {
-        expandir(argv);
+
+        args = expandir(argv);
+
+        if (strcmp("cd", argv[argc]) == 0) {
+          /* acc = &cd; */
+        } else if (strcmp("set", argv[argc]) == 0) {
+          /* acc = &set; */
+        } else if (strcmp("umask", argv[argc]) == 0) {
+          /* acc = &umask; */
+        } else if (strcmp("limit", argv[argc]) == 0) {
+          /* acc = &limit; */
+        } else {
+          /* acc = &gen; */
+        }
+
         if (strcmp("cd", argv[argc]) == 0) {
           printf("CD EMPEZANDO");
           if (cd(argv[argc + 1]) == -1) {
