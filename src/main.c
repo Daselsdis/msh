@@ -19,13 +19,16 @@
  */
 
 #include <assert.h>
+#include <bits/types/sigset_t.h>
 #include <errno.h>
 #include <glob.h>
 #include <pwd.h>
+#include <signal.h>
 #include <stddef.h> /* NULL */
 #include <stdio.h>  /* setbuf, printf */
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #define charAscii(a) (a - '\0')
@@ -42,7 +45,7 @@ extern int obtain_order(char ****argvvp, char *filep[3],
 
 extern char **environ;
 
-char *commands = {"cd"};
+char *commands[5] = {"cd", "set", "umask", "limit", "gen"};
 
 #define Autosprintf(buff, msg, ...)                                            \
   {                                                                            \
@@ -203,59 +206,17 @@ expand *expandir(char **str) {
   return res;
 }
 
-int limit() { assert(0 && "TODO: Implement limit"); }
-int umask() { assert(0 && "TODO: Implement umask"); }
+int cd(expand args) { assert(0 && "TODO: Implement cd"); }
+int set(expand args) { assert(0 && "TODO: Implement set"); }
+int umask(expand args) { assert(0 && "TODO: Implement umask"); }
+int limit(expand args) { assert(0 && "TODO: Implement limit"); }
+int gen(expand args) { assert(0 && "TODO: Implement gen"); }
 
 void pArgsAll() {
   char **cursor = environ;
   while (*cursor) {
     printf("%s\n", *cursor++);
   }
-}
-
-/* TODO: Implementar set para tomar expand*/
-int set(char *name, char *val) {
-  if (val == NULL) {
-    if (name == NULL)
-      pArgsAll();
-    else {
-      char *res = getenv(name);
-      if (res == NULL)
-        pArgsAll();
-      else
-        printf("%s=%s\n", name, res);
-    }
-  } else {
-    setenv(name, val, 1);
-  }
-  return 0;
-}
-
-/*int changeDir(char *path) { return 0; }*/
-/* TODO: Implementar cd para tomar expand*/
-int cd(char *args) {
-  char *dir;
-  if (args == NULL) { /* NOT passed a dir, $HOME */
-    dir = getenv("HOME");
-    if (dir != NULL) {
-      return chdir(dir);
-    } else {
-    }
-  } else {                /* Passed a dir */
-    if (args[0] == '~') { /* Passed a dir from $HOME */
-      dir = getenv("HOME");
-      if (dir != NULL) {
-        strcat(dir, args);
-        return chdir(dir);
-      } else {
-        perror("$HOME VAR NOT SET");
-      }
-    } else {
-      strcat(dir, args);
-      return chdir(dir);
-    }
-  }
-  return -1;
 }
 
 void setIniVars() {
@@ -268,7 +229,19 @@ void setIniVars() {
   setenv("status", "0", 1);
 }
 
+int (*acc[5])(expand) = {&cd, &set, &umask, &limit, &gen};
+
 int main(void) {
+
+  sigset_t mGen;
+  sigaddset(&mGen, SIGINT);
+  sigaddset(&mGen, SIGQUIT);
+  sigprocmask(SIG_BLOCK, &mGen, NULL);
+
+  int fd0OG = dup(0);
+  int fd1OG = dup(1);
+  int fd2OG = dup(2);
+
   char ***argvv = NULL;
   int argvc;
   char **argv = NULL;
@@ -282,12 +255,18 @@ int main(void) {
 
   setIniVars();
 
-  void (*acc)(expand);
   expand *args;
+  int pipa[2];
+  int prevPipaSalida;
+  int sec;
+  pid_t hijoSac, nieto, bgpid;
+  int nf;
+  int status;
+  char *prompt;
 
   while (1) {
 
-    char *prompt = getenv("prompt");
+    prompt = getenv("prompt");
     if (prompt == NULL) {
       /* I don't think this is possible, but yk, just in case*/
       prompt = "";
@@ -302,54 +281,136 @@ int main(void) {
     if (argvc == 0)
       continue; /* Empty line */
 
+    sec = 0;
+
     for (argvc = 0; (argv = argvv[argvc]); argvc++) {
+
+      if (sec)
+        prevPipaSalida = pipa[0];
+
+      sec = argvv[argvc + 1] != NULL;
       args = expandir(argv);
+
       if (strcmp("cd", argv[0]) == 0) {
         /* acc = &cd; */
+        nf = 0;
       } else if (strcmp("set", argv[0]) == 0) {
         /* acc = &set; */
+        nf = 1;
       } else if (strcmp("umask", argv[0]) == 0) {
         /* acc = &umask; */
+        nf = 2;
       } else if (strcmp("limit", argv[0]) == 0) {
         /* acc = &limit; */
+        nf = 3;
       } else {
         /* acc = &gen; */
+        nf = 4;
       }
 
-      for (argc = 0; argv[argc]; argc++) {
-
-        args = expandir(argv);
-
-        if (strcmp("cd", argv[argc]) == 0) {
-          /* acc = &cd; */
-        } else if (strcmp("set", argv[argc]) == 0) {
-          /* acc = &set; */
-        } else if (strcmp("umask", argv[argc]) == 0) {
-          /* acc = &umask; */
-        } else if (strcmp("limit", argv[argc]) == 0) {
-          /* acc = &limit; */
-        } else {
-          /* acc = &gen; */
+      if (sec) {
+        if (pipe(pipa) < 0) {
+          perror("pipe");
+          return 1;
         }
+      } else {
 
-        if (strcmp("cd", argv[argc]) == 0) {
-          printf("CD EMPEZANDO");
-          if (cd(argv[argc + 1]) == -1) {
-            perror("Error in cd execution: ");
+        /* TODO: Implementar redirección de entradas y salidas y tal */
+      }
+
+      if (nf < 4) {      /* Internal */
+        if (sec || bg) { /* Llamar en bg */
+          hijoSac = fork();
+
+          if (hijoSac == -1) {
+            perror("fork");
+            return 1;
+          } else if (hijoSac == 0) { /* HijoSac */
+            nieto = fork();
+
+            if (nieto == -1) {
+              perror("fork");
+              return 1;
+            } else if (nieto == 0) { /* Nieto */
+              acc[nf](*args);
+              exit(0);
+            } else { /* HijoSac */
+              printf("[%d]\n", nieto);
+              exit(nieto);
+            }
+
+          } else { /* msh */
+            wait(&bgpid);
+            char *tBuff;
+            Autosprintf(tBuff, "%d", nieto);
+            setenv("bgpid", tBuff, 1);
           }
-        } else if (strcmp("set", argv[argc]) == 0) {
+        } else { /* Llamar en fg */
+          status = acc[nf](*args);
+          char *tBuff;
+          Autosprintf(tBuff, "%d", status);
+          setenv("status", tBuff, 1);
+        }
+      } else { /* external*/
+        hijoSac = fork();
 
-          /* printf("%s", argv[argc]); */
-          /* printf("%s\n", argv[argc + 1]); */
-          /* printf("%s\n", argv[argc + 2]); */
-          /* printf("%s", argv[argc]); */
-          /* printf("%s", argv[argc + 1]); */
-          if (argv[argc + 1] == NULL)
-            set(NULL, NULL);
-          else
-            set(argv[argc + 1], argv[argc + 2]);
+        if (hijoSac == -1) {
+          perror("fork");
+          return 1;
+        } else if (hijoSac == 0) { /* hijoSac */
+          if (sec || bg) {         /* Llamar en bg */
+            nieto = fork();
+            if (nieto == -1) {
+              perror("fork");
+              return 1;
+            } else if (nieto == 0) { /* nieto */
+              acc[nf](*args);
+              exit(0);
+            } else { /* hijoSac*/
+              printf("[%d]\n", nieto);
+              exit(nieto);
+            }
+          } else { /* Foreground */
+            sigset_t mProc;
+            sigemptyset(&mProc);
+            sigprocmask(SIG_SETMASK, &mProc, NULL);
+            status = acc[nf](*args);
+            exit(status);
+          }
+        } else { /* msh */
+          int rets;
+          wait(&rets);
+          if (bg || sec) {
+            char *tBuff;
+            Autosprintf(tBuff, "%d", rets);
+            setenv("bgpid", tBuff, 1);
+          } else {
+            char *tBuff;
+            Autosprintf(tBuff, "%d", rets);
+            setenv("status", tBuff, 1);
+          }
         }
       }
+
+      /* for (argc = 0; argv[argc]; argc++) { */
+      /*   if (strcmp("cd", argv[argc]) == 0) { */
+      /*     printf("CD EMPEZANDO"); */
+      /*     if (cd(argv[argc + 1]) == -1) { */
+      /*       perror("Error in cd execution: "); */
+      /*     } */
+      /*   } else if (strcmp("set", argv[argc]) == 0) { */
+      /**/
+      /*     printf("%s", argv[argc]); */
+      /*     printf("%s\n", argv[argc + 1]); */
+      /*     printf("%s\n", argv[argc + 2]); */
+      /*     printf("%s", argv[argc]); */
+      /*     printf("%s", argv[argc + 1]); */
+      /*     if (argv[argc + 1] == NULL) */
+      /*       set(NULL, NULL); */
+      /*     else */
+      /*       set(argv[argc + 1], argv[argc + 2]); */
+      /*   } */
+      /* } */
       /* printf("%s\n", argv[argc]); */
       /* printf("Hasta aquí argv %d\n", argvc); */
     }
