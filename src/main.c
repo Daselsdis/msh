@@ -20,6 +20,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <glob.h>
 #include <pwd.h>
 #include <stddef.h> /* NULL */
 #include <stdio.h>  /* setbuf, printf */
@@ -162,12 +163,29 @@ void expandirVar(char **sMod) {
 
     int offset = strlen(varName);
     Autosprintf(res, "%s%s%s", pre, sub, &sMod[0][pos + offset]);
+    free(pre);
     free(*sMod);
     *sMod = res;
   }
 }
-void expandirWildcard(expand *res, char **sMod) {
-  assert(0 && "Implement expandirWildcard");
+void expandirWildcard(expand *res, char *sMod) {
+  if (strCont(sMod, '/') > -1 || strCont(sMod, '?') == -1) {
+    addExpasion(res, sMod);
+  } else {
+    glob_t *gRes;
+    int r;
+    glob(sMod, 0, NULL, gRes);
+    if (r == GLOB_NOMATCH) {
+      addExpasion(res, sMod);
+    } else if (r != 0) {
+      perror("glob");
+    } else {
+      for (size_t i = 0; i < gRes->gl_pathc; i++) {
+        addExpasion(res, strdup(gRes->gl_pathv[i]));
+      }
+    }
+    globfree(gRes);
+  }
 }
 expand *expandir(char **str) {
   expand *res = calloc(1, sizeof(expand));
@@ -178,7 +196,7 @@ expand *expandir(char **str) {
     } else {
       expandirTilde(&sMod);
       expandirVar(&sMod);
-      expandirWildcard(res, &sMod);
+      expandirWildcard(res, sMod);
     }
   }
 
