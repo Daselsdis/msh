@@ -30,6 +30,7 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 extern int obtain_order(char ****argvvp, char *filep[3],
@@ -80,6 +81,7 @@ int main(void) {
   int contador_sentencias;
 
   int es_hijo_bak = 0;
+  int es_hijo_pipe = 0;
   int bgpid;
   int stdout_sav, stdin_sav, stderr_sav;
   char *resources[] = {"cpu", "fsize", "data", "stack", "core", "nofile"};
@@ -92,9 +94,6 @@ int main(void) {
   sigaddset(&sigset, SIGINT);
   sigaddset(&sigset, SIGQUIT);
   sigprocmask(SIG_BLOCK, &sigset, NULL);
-  stdin_sav = dup(STDIN);
-  stdout_sav = dup(STDOUT);
-  stderr_sav = dup(STDERR);
 
   extern char **environ;
 
@@ -107,6 +106,9 @@ int main(void) {
 
   setenv("bgpid", "0", 1);
   setenv("status", "0", 1);
+  stdin_sav = dup(STDIN);
+  stdout_sav = dup(STDOUT);
+  stderr_sav = dup(STDERR);
 
   while (1) {
 
@@ -116,6 +118,7 @@ int main(void) {
     fprintf(stderr, " %s", getenv("prompt")); /* Prompt */
     ret = obtain_order(&argvv, filev, &bg);
     if (ret == 0) {
+
       break; /* EOF */
     }
     if (ret == -1)
@@ -128,19 +131,17 @@ int main(void) {
      * REDIRECCION y BG
      */
 
-    int fd, fd_reddirIN, fd_reddirOUT, fd_reddirERR;
+    int fd;
     if (filev[0]) {
       fd = open(filev[0], O_RDONLY);
       if (fd != -1) {
         close(0);
         dup(fd);
-        fd_reddirIN = fd;
+        close(fd);
       } else {
         perror("ERROR reddir_stdin");
         continue;
       }
-    } else {
-      fd_reddirIN = stdin_sav;
     }
 
     if (filev[1]) {
@@ -149,14 +150,11 @@ int main(void) {
 
         close(1);
         dup(fd);
-        fd_reddirOUT = fd;
+        close(fd);
       } else {
         perror("ERROR reddir_stdout");
         continue;
       }
-
-    } else {
-      fd_reddirOUT = stdout_sav;
     }
 
     if (filev[2]) {
@@ -165,16 +163,12 @@ int main(void) {
 
         close(2);
         dup(fd);
-        fd_reddirERR = fd;
+        close(fd);
       } else {
         perror("ERROR reddir_stderr");
         continue;
       }
-
-    } else {
-      fd_reddirERR = stderr_sav;
     }
-
     if (bg) {
 
       int fd[2];
@@ -190,9 +184,8 @@ int main(void) {
 
       } else if (bgpid != 0) {
         close(fd[1]);
-        read(fd[0], &bgpid, 4);
+        read(fd[0], &bgpid, sizeof(pid_t));
         close(fd[0]);
-        wait(NULL);
 
         char *aux = malloc(snprintf(NULL, 0, "%d", bgpid) + 1);
         sprintf(aux, "%d", bgpid);
@@ -212,9 +205,12 @@ int main(void) {
 
         } else if (bgpid != 0) {
           close(fd[0]);
-          write(fd[1], &bgpid, 4);
+          write(fd[1], &bgpid, sizeof(pid_t));
           close(fd[1]);
           printf("[%d]\n", bgpid);
+          close(stdin_sav);
+          close(stdout_sav);
+          close(stderr_sav);
           exit(0);
         } else {
           close(fd[0]);
@@ -392,14 +388,96 @@ int main(void) {
      * */
 
     int (*pipes)[2] = malloc((contador_sentencias - 1) * sizeof *pipes);
-
-    /*mandatos internnos
+    /*
+     * todos los fork de pipes
      *
-     * mandatos no internos  Execv
-     */
+     *
+     * */
+    for (int i = 0; i < (contador_sentencias); i++) { /*en las sentencias*/
 
-    for (argvc = 0; (argv = argvv[argvc]); argvc++) {
-      if (argvc > 0) {
+      if (i >= (contador_sentencias - 1)) { /*si es la ultima sentencia pasa*/
+
+        if (i > 0) { /*si no es unico, redir in*/
+
+          close(0);
+          dup(pipes[i - 1][0]);
+        }
+        for (int j = i - 1; j >= 0; j--) {
+
+          close(pipes[j][0]);
+          close(pipes[j][1]);
+        }
+        argv = argvv[i];
+        break;
+      }
+
+      /*sino, crea pipes y forkea*/
+
+      if (pipe(pipes[i]) == -1) {
+        fprintf(stderr, "error pipes \n");
+
+        goto fin_secuencia;
+      }
+
+      int pid_pipes;
+      pid_pipes = fork();
+
+      if (pid_pipes == -1) {
+
+        fprintf(stderr, "error fork pipes");
+        goto fin_secuencia;
+      } else if (pid_pipes == 0) {
+
+        int pid_fork2;
+
+        pid_fork2 = fork();
+
+        if (pid_fork2 == -1) {
+          fprintf(stderr, "error fork2 pipes");
+          goto fin_secuencia;
+
+        } else if (pid_fork2 == 0) {
+
+          /*si no es primero*/
+          if (i > 0) {
+
+            close(0);
+            dup(pipes[i - 1][0]);
+          }
+
+          /*si no es ultimo*/
+
+          if (i < (contador_sentencias - 1)) {
+
+            close(1);
+            dup(pipes[i][1]);
+          }
+
+          for (int j = i; j >= 0; j--) {
+
+            close(pipes[j][0]);
+            close(pipes[j][1]);
+          }
+
+          argv = argvv[i];
+          es_hijo_pipe = 1;
+          break;
+
+        } else {
+          close(stdin_sav);
+          close(stdout_sav);
+          close(stderr_sav);
+
+          exit(0); /* deja huerfano, evita zombis */
+        }
+
+      } else {
+        continue;
+      }
+    }
+
+    //  for (argvc = 0; (argv = argvv[argvc]); argvc++) {
+    /*  if (argvc > 0) {
 
         close(0);
         dup(pipes[argvc - 1][0]);
@@ -418,49 +496,58 @@ int main(void) {
 
         close(1);
         dup(fd_reddirOUT);
+      }*/
+
+    /*mandatos internnos
+     *
+     * mandatos no internos  Execv
+     */
+
+    if (strcmp(argv[0], "cd") == 0) {
+
+      char *aux;
+
+      if (!argv[1]) {
+
+        if (chdir(getenv("HOME")) == -1) {
+          fprintf(stderr, "ERROR al buscar %s , no existe ese directorio \n",
+                  getenv("HOME"));
+        }
+        aux = calloc(1000, sizeof(char));
+
+        getcwd(aux, 1000);
+        printf("%s\n", aux);
+        free(aux);
+
+        goto fin_secuencia;
       }
 
-      if (strcmp(argv[0], "cd") == 0) {
+      else {
 
-        char *aux;
-
-        if (!argv[1]) {
-
-          char *aux;
-          if (chdir(getenv("HOME")) == -1) {
-            fprintf(stderr, "ERROR al buscar %s , no existe ese directorio \n",
-                    getenv("HOME"));
-          }
-          aux = calloc(1000, sizeof(char));
-
-          getcwd(aux, 1000);
-          printf("%s\n", aux);
-          free(aux);
-
-          break;
+        if (chdir(argv[1]) == -1) {
+          fprintf(stderr, "ERROR al buscar %s , no existe ese directorio \n",
+                  argv[1]);
         }
+        aux = calloc(1000, sizeof(char));
 
-        else {
+        getcwd(aux, 1000);
+        printf("%s\n", aux);
+        free(aux);
 
-          if (chdir(argv[1]) == -1) {
-            fprintf(stderr, "ERROR al buscar %s , no existe ese directorio \n",
-                    argv[1]);
-          }
-          aux = calloc(1000, sizeof(char));
+        goto fin_secuencia;
+      }
+    } else if (strcmp(argv[0], "umask") == 0) {
+      int aux_int;
+      if (!argv[1]) {
+        aux_int = umask(0);
+        printf("%o\n", aux_int);
+        aux_int = umask(aux_int);
 
-          getcwd(aux, 1000);
-          printf("%s\n", aux);
-          free(aux);
+      } else {
 
-          break;
-        }
-      } else if (strcmp(argv[0], "umask") == 0) {
-        int aux_int;
-        if (!argv[1]) {
-          aux_int = umask(0);
-          printf("%o\n", aux_int);
-          aux_int = umask(aux_int);
-
+        if (argv[2]) {
+          fprintf(stderr, "no debe de haber mas de 1 argumento en umask");
+          goto fin_secuencia;
         } else {
           char *c_end;
           aux_int = strtol(argv[1], &c_end, 8);
@@ -469,117 +556,140 @@ int main(void) {
               !(aux_int >= 0 && aux_int <= 0777)) {
 
             fprintf(stderr, "mascara \" %s \" invalida \n", argv[1]);
-            break;
+            goto fin_secuencia;
           }
 
           umask(aux_int);
         }
-      } else if (strcmp(argv[0], "set") == 0) {
-        alarm(2);
-        if (!argv[1]) {
-          int i = 0;
-          while (environ[i]) {
-            printf("%s\n", environ[i++]);
-          }
-        } else {
-          for (int i = 1; argv[i] != NULL;) {
-            if (argv[i + 1]) {
-              setenv(argv[i], argv[i + 1], 1);
-              i++;
-            } else {
-              if (getenv(argv[i])) {
-                printf("%s=%s\n", argv[i], getenv(argv[i]));
-              } else {
-                printf("variable no declarada\n");
-              }
-            }
+      }
+    } else if (strcmp(argv[0], "set") == 0) {
+      if (!argv[1]) {
+        int i = 0;
+        while (environ[i]) {
+          printf("%s\n", environ[i++]);
+        }
+      } else {
+        for (int i = 1; argv[i] != NULL;) {
+          if (argv[i + 1]) {
+            setenv(argv[i], argv[i + 1], 1);
             i++;
-          }
-        }
-        alarm(0);
-      } else if (strcmp(argv[0], "limit") == 0) {
-        alarm(2);
-        struct rlimit aux_lim;
-        struct rlimit *aux = &aux_lim;
-        if (!argv[1]) {
-          for (int i = 0; i < resources_size; i++) {
-
-            if (tipo_recurso(resources[i]) == -1) {
-              fprintf(stderr, "ERROR recurso no encontrado \n");
+          } else {
+            if (getenv(argv[i])) {
+              printf("%s=%s\n", argv[i], getenv(argv[i]));
             } else {
-              getrlimit(tipo_recurso(resources[i]), aux);
-              fprintf(stdout, "%s\t%d\n", resources[i], (int)aux->rlim_max);
+              printf("variable no declarada\n");
             }
           }
-
+          i++;
         }
+      }
+    } else if (strcmp(argv[0], "limit") == 0) {
+      struct rlimit aux_lim;
+      struct rlimit *aux = &aux_lim;
+      if (!argv[1]) {
+        for (int i = 0; i < resources_size; i++) {
 
-        else {
-          for (int i = 1; argv[i] != NULL;) {
-            if (argv[i + 1]) {
-              if (tipo_recurso(argv[i]) == -1) {
-                fprintf(stderr, "ERROR recurso no encontrado \n");
-              } else {
+          if (tipo_recurso(resources[i]) == -1) {
+            fprintf(stderr, "ERROR recurso no encontrado \n");
+          } else {
+            if (getrlimit(tipo_recurso(resources[i]), aux) == 0) {
+              if (aux->rlim_cur == RLIM_INFINITY) {
+                fprintf(stdout, "%s\t-1\n", resources[i]);
+              }
 
-                if (getrlimit(tipo_recurso(argv[i]), aux) == 0) {
-                  aux->rlim_max = strtol(argv[i + 1], NULL, 0);
-                  if (aux->rlim_cur >= aux->rlim_max) {
-                    aux->rlim_cur = aux->rlim_max - 1;
-                  }
-                  if (setrlimit(tipo_recurso(argv[i]), aux) != 0) {
-                    perror("ERROR setlimtr \n");
-                  }
-                }
+              else {
 
-                else {
-                  perror("ERROR getlimtr \n");
-                }
-
-                i++;
+                fprintf(stdout, "%s\t%d\n", resources[i], (int)aux->rlim_cur);
               }
             } else {
-              if (tipo_recurso(argv[i]) == -1) {
-                fprintf(stderr, "ERROR recurso no encontrado \n");
-              } else {
-                if (getrlimit(tipo_recurso(argv[i]), aux) == 0) {
-
-                  fprintf(stdout, "%s\t%d\n", argv[i], (int)aux->rlim_max);
-                }
-
-                else {
-                  perror("ERROR getlimtr");
-                }
-              }
+              perror("ERROR getlimtr");
             }
-            i++;
           }
         }
-        alarm(0);
+
       }
 
       else {
-        pid_t pid = fork();
 
-        if (pid == -1) {
-          fprintf(stderr, "ERROR fork \n");
-        } else if (pid == 0) {
-          sigprocmask(SIG_UNBLOCK, &sigset, NULL);
-          if (execvp(argv[0], argv) == -1) {
+        if (!argv[2]) {
+          if (tipo_recurso(argv[1]) == -1) {
+            fprintf(stderr, "ERROR recurso no encontrado \n");
+          } else {
+            if (getrlimit(tipo_recurso(argv[1]), aux) == 0) {
 
-            perror("ERROR execvp ");
-            exit(-1);
+              if (aux->rlim_cur == RLIM_INFINITY) {
+                fprintf(stdout, "%s\t%d\n", argv[1], -1);
+              }
+
+              else {
+
+                fprintf(stdout, "%s\t%d\n", argv[1], (int)aux->rlim_cur);
+              }
+            }
+
+            else {
+              perror("ERROR getlimtr");
+            }
           }
         } else {
-          int valor;
-          wait(&valor);
+          if (tipo_recurso(argv[1]) == -1) {
 
-          char *aux = malloc(snprintf(NULL, 0, "%d", valor) + 1);
-          sprintf(aux, "%d", valor);
-          setenv("status", aux, 1);
-          free(aux);
+            fprintf(stderr, "ERROR recurso no encontrado \n");
+          } else {
+            if (getrlimit(tipo_recurso(argv[1]), aux) == 0) {
+              int lim = strtol(argv[2], NULL, 0);
+
+              if (lim == -1) {
+                aux->rlim_max = RLIM_INFINITY;
+              } else {
+                aux->rlim_max = lim;
+              }
+
+              if (aux->rlim_max == RLIM_INFINITY) {
+                aux->rlim_cur = RLIM_INFINITY;
+              } else if (aux->rlim_cur >= aux->rlim_max) {
+                aux->rlim_cur = aux->rlim_max - 1;
+              }
+              if (setrlimit(tipo_recurso(argv[1]), aux) != 0) {
+                perror("ERROR setlimtr \n");
+              }
+            } else {
+              perror("ERROR getlimtr");
+            }
+          }
         }
       }
     }
+
+    else {
+      pid_t pid = fork();
+
+      if (pid == -1) {
+        fprintf(stderr, "ERROR fork \n");
+      } else if (pid == 0) {
+        if (!es_hijo_bak) {
+          sigprocmask(SIG_UNBLOCK, &sigset, NULL);
+        }
+        if (execvp(argv[0], argv) == -1) {
+
+          perror("ERROR execvp ");
+          close(stdin_sav);
+          close(stdout_sav);
+          close(stderr_sav);
+          exit(-1);
+        }
+      } else {
+        int valor;
+        wait(&valor);
+
+        char *aux = malloc(snprintf(NULL, 0, "%d", valor) + 1);
+        sprintf(aux, "%d", valor);
+        setenv("status", aux, 1);
+        free(aux);
+      }
+    }
+
+  fin_secuencia:
     free(pipes);
 
     close(STDIN);
@@ -588,8 +698,11 @@ int main(void) {
     dup(stdout_sav);
     close(STDERR);
     dup(stderr_sav);
-    if (es_hijo_bak) {
+    if (es_hijo_bak || es_hijo_pipe) {
       break;
     }
   }
+  close(stdin_sav);
+  close(stdout_sav);
+  close(stderr_sav);
 }
