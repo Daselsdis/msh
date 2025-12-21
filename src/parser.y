@@ -1,24 +1,4 @@
 %{
-/*-
- * parse.y
- * Minishell "yacc" source
- * Describes valid input grammar
- * Exports "obtain_order" input interface function.
- *
- * Copyright (c) 1993-2002-2019-2025, Francisco Rosales <frosal@fi.upm.es>
- * Todos los derechos reservados.
- *
- * Publicado bajo Licencia de Proyecto Educativo Práctico
- * <http://laurel.datsi.fi.upm.es/~ssoo/LICENCIA/LPEP>
- *
- * Queda prohibida la difusión total o parcial por cualquier
- * medio del material entregado al alumno para la realización 
- * de este proyecto o de cualquier material derivado de este, 
- * incluyendo la solución particular que desarrolle el alumno.
- *
- * DO NOT MODIFY THIS FILE
- */
-
 #include <stddef.h>			/* NULL */
 #include <stdlib.h>			/* malloc */
 #include <string.h>			/* strlen */

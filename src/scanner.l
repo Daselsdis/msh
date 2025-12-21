@@ -1,23 +1,4 @@
 %{
-/*-
- * scanner.l
- * Minishell "lex" source
- * Describes valid input lexic.
- *
- * Copyright (c) 1993-2002-2019, Francisco Rosales <frosal@fi.upm.es>
- * Todos los derechos reservados.
- *
- * Publicado bajo Licencia de Proyecto Educativo Práctico
- * <http://laurel.datsi.fi.upm.es/~ssoo/LICENCIA/LPEP>
- *
- * Queda prohibida la difusión total o parcial por cualquier
- * medio del material entregado al alumno para la realización 
- * de este proyecto o de cualquier material derivado de este, 
- * incluyendo la solución particular que desarrolle el alumno.
- *
- * DO NOT MODIFY THIS FILE
- */
-
 #include <unistd.h>     /* isatty, write */
 #include <string.h>     /* strdup */
 
