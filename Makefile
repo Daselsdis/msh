@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -fsanitize=address
+CFLAGS = -Wall -Wextra -Wno-maybe-uninitialized -fsanitize=address
 LEX = flex
 YACC = bison --yacc
 YFLAGS = -d -Wno-yacc
