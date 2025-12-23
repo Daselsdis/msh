@@ -46,15 +46,9 @@
 extern int obtain_order(char ****argvvp, char *filep[3],
                         int *bgp); /* See parser.y for description */
 
-#define TESTING 0
-
-#if TESTING
-extern int test_fds();
-#endif
-
 extern char **environ;
 
-char *commands[5] = {"cd", "set", "umask", "limit", "gen"};
+/* char *commands[5] = {"cd", "set", "umask", "limit", "gen"}; */
 
 #define Autosprintf(buff, msg, ...)                                            \
   {                                                                            \
@@ -695,9 +689,6 @@ int main(void) {
           free(tBuff);
         }
       }
-#if TESTING
-      test_fds();
-#endif
       freeExpansion(args);
     }
   }
