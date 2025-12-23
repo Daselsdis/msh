@@ -46,6 +46,12 @@
 extern int obtain_order(char ****argvvp, char *filep[3],
                         int *bgp); /* See parser.y for description */
 
+#define TESTING 0
+
+#if TESTING
+extern int test_fds();
+#endif
+
 extern char **environ;
 
 char *commands[5] = {"cd", "set", "umask", "limit", "gen"};
@@ -381,7 +387,7 @@ int main(void) {
   char ***argvv = NULL;
   int argvc;
   char **argv = NULL;
-  int argc;
+  /* int argc; */
   char *filev[3] = {NULL, NULL, NULL};
   int bg;
   int ret;
@@ -392,7 +398,7 @@ int main(void) {
   setIniVars();
 
   expand *args;
-  /* int pipa[2]; */
+  int pipa[2];
   int prevPipaSalida;
   int sec;
   pid_t hijoSac, nieto, bgpid;
@@ -418,7 +424,8 @@ int main(void) {
       continue; /* Empty line */
 
     sec = 0;
-    int pipa[2] = {-1, -1};
+    pipa[0] = -1;
+    pipa[1] = -1;
 
     for (argvc = 0; (argv = argvv[argvc]); argvc++) {
 
@@ -520,6 +527,7 @@ int main(void) {
             dup(pipa[1]);
             close(pipa[1]);
           }
+
           int fd;
           if (filev[0]) {
             fd = open(filev[0], O_RDONLY);
@@ -687,6 +695,9 @@ int main(void) {
           free(tBuff);
         }
       }
+#if TESTING
+      test_fds();
+#endif
       freeExpansion(args);
     }
   }
