@@ -326,12 +326,17 @@ int umaskf(expand args) {
     printf("%o\n", m);
     return 0;
   } else if (args.size - 1 == 2) {
-    int o = strtol(args.argsExp[1], NULL, 8);
+    char *rango;
+    int o = strtol(args.argsExp[1], &rango, 8);
+    if (args.argsExp[1] == rango) {
+      fprintf(stderr, "umask: Mask out of range\n");
+      return -1;
+    }
     mode_t m = umask(o);
     printf("%o\n", m);
     return 0;
   } else {
-    fprintf(stderr, "limit: Too many args\n");
+    fprintf(stderr, "umask: Too many args\n");
     return 1;
   }
 }
@@ -483,6 +488,41 @@ int main(void) {
                 dup(pipa[1]);
                 close(pipa[1]);
               }
+
+              if (prevPipaSalida == -1 && filev[0]) { /* primer mandato */
+                int fd = open(filev[0], O_RDONLY);
+                if (fd != -1) {
+                  close(0);
+                  dup(fd);
+                  close(fd);
+                } else {
+                  perror("open");
+                  exit(1);
+                }
+              }
+              if (sec == 0 && filev[1]) { /* último mandato */
+                int fd = creat(filev[1], 0666);
+                if (fd != -1) {
+                  close(1);
+                  dup(fd);
+                  close(fd);
+                } else {
+                  perror("creat");
+                  exit(1);
+                }
+              }
+              if (sec == 0 && filev[2]) { /* último mandato */
+                int fd = creat(filev[2], 0666);
+                if (fd != -1) {
+                  close(2);
+                  dup(fd);
+                  close(fd);
+                } else {
+                  perror("creat");
+                  exit(1);
+                }
+              }
+
               acc[nf](*args);
               exit(0);
             } else {                      /* HijoSac */
@@ -523,7 +563,7 @@ int main(void) {
           }
 
           int fd;
-          if (filev[0]) {
+          if (prevPipaSalida == -1 && filev[0]) {
             fd = open(filev[0], O_RDONLY);
             if (fd != -1) {
               close(0);
@@ -595,6 +635,40 @@ int main(void) {
                 dup(pipa[1]);
                 close(pipa[1]);
               }
+
+              if (prevPipaSalida == -1 && filev[0]) { /* primer mandato */
+                int fd = open(filev[0], O_RDONLY);
+                if (fd != -1) {
+                  close(0);
+                  dup(fd);
+                  close(fd);
+                } else {
+                  perror("open");
+                  exit(1);
+                }
+              }
+              if (sec == 0 && filev[1]) { /* último mandato */
+                int fd = creat(filev[1], 0666);
+                if (fd != -1) {
+                  close(1);
+                  dup(fd);
+                  close(fd);
+                } else {
+                  perror("creat");
+                  exit(1);
+                }
+              }
+              if (sec == 0 && filev[2]) { /* último mandato */
+                int fd = creat(filev[2], 0666);
+                if (fd != -1) {
+                  close(2);
+                  dup(fd);
+                  close(fd);
+                } else {
+                  perror("creat");
+                  exit(1);
+                }
+              }
               acc[nf](*args);
               exit(0);
             } else {                      /* hijoSac*/
@@ -623,7 +697,7 @@ int main(void) {
               close(pipa[1]);
             }
             int fd;
-            if (filev[0]) {
+            if (prevPipaSalida == -1 && filev[0]) {
               fd = open(filev[0], O_RDONLY);
               if (fd != -1) {
                 close(0);
