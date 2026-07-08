@@ -45,6 +45,12 @@ void liberar_environ(char **env, int n_var) {
   }
   free(env);
 }
+void sigchld_handler(int sig) {
+
+  while (waitpid(-1, NULL, WNOHANG) > 0) {
+    //  printf("hijo muerto");
+  };
+}
 
 int tipo_recurso(char *str) {
   if (!strcmp(str, "cpu")) {
@@ -80,6 +86,7 @@ int main(void) {
 
   int contador_sentencias;
 
+  int status_aux = 0;
   int es_hijo_bak = 0;
   int es_hijo_pipe = 0;
   int bgpid;
@@ -87,6 +94,7 @@ int main(void) {
   char *resources[] = {"cpu", "fsize", "data", "stack", "core", "nofile"};
   int resources_size = 6;
   sigset_t sigset;
+  struct sigaction S_CHLD = {0};
   setbuf(stdout, NULL); /* Unbuffered */
   setbuf(stdin, NULL);
 
@@ -94,6 +102,11 @@ int main(void) {
   sigaddset(&sigset, SIGINT);
   sigaddset(&sigset, SIGQUIT);
   sigprocmask(SIG_BLOCK, &sigset, NULL);
+
+  S_CHLD.sa_handler = sigchld_handler;
+  sigemptyset(&S_CHLD.sa_mask);
+  S_CHLD.sa_flags = SA_RESTART;
+  sigaction(SIGCHLD, &S_CHLD, NULL);
 
   extern char **environ;
 
@@ -117,6 +130,7 @@ int main(void) {
 
     fprintf(stderr, " %s", getenv("prompt")); /* Prompt */
     ret = obtain_order(&argvv, filev, &bg);
+    status_aux = 0;
     if (ret == 0) {
 
       break; /* EOF */
@@ -171,52 +185,30 @@ int main(void) {
     }
     if (bg) {
 
-      int fd[2];
-      pipe(fd);
-
       bgpid = fork();
 
       if (bgpid == -1) {
-        close(fd[0]);
-        close(fd[1]);
 
         fprintf(stderr, "error fork \n");
 
       } else if (bgpid != 0) {
-        close(fd[1]);
-        read(fd[0], &bgpid, sizeof(pid_t));
-        close(fd[0]);
 
         char *aux = malloc(snprintf(NULL, 0, "%d", bgpid) + 1);
         sprintf(aux, "%d", bgpid);
         setenv("bgpid", aux, 1);
+        close(STDOUT);
+        dup(stdout_sav);
+        printf("[%s]\n", aux);
         free(aux);
+        close(STDIN);
+        dup(stdin_sav);
+        close(STDERR);
+        dup(stderr_sav);
 
         continue;
 
       } else {
-        bgpid = fork();
-        if (bgpid == -1) {
-
-          close(fd[0]);
-          close(fd[1]);
-
-          fprintf(stderr, "error fork \n");
-
-        } else if (bgpid != 0) {
-          close(fd[0]);
-          write(fd[1], &bgpid, sizeof(pid_t));
-          close(fd[1]);
-          printf("[%d]\n", bgpid);
-          close(stdin_sav);
-          close(stdout_sav);
-          close(stderr_sav);
-          exit(0);
-        } else {
-          close(fd[0]);
-          close(fd[1]);
-          es_hijo_bak = 1;
-        }
+        es_hijo_bak = 1;
       }
     }
 
@@ -451,6 +443,7 @@ int main(void) {
 
         argv = argvv[i];
         es_hijo_pipe = 1;
+
         break;
 
       } else {
@@ -458,10 +451,10 @@ int main(void) {
       }
     }
 
-    for (int i = 0; i < contador_sentencias - 1; i++) {
-      int valpipes;
-      wait(&valpipes); // Espera a todos los hijos de los pipes
-    }
+    // for (int i = 0; i < contador_sentencias - 1; i++) {
+    //  int valpipes;
+    //  wait(&valpipes); // Espera a todos los hijos de los pipes
+    // }
 
     //  for (argvc = 0; (argv = argvv[argvc]); argvc++) {
     /*  if (argvc > 0) {
@@ -499,6 +492,9 @@ int main(void) {
         if (chdir(getenv("HOME")) == -1) {
           fprintf(stderr, "ERROR al buscar %s , no existe ese directorio \n",
                   getenv("HOME"));
+          status_aux = 1;
+        } else {
+          status_aux = 0;
         }
         aux = calloc(1000, sizeof(char));
 
@@ -514,6 +510,9 @@ int main(void) {
         if (chdir(argv[1]) == -1) {
           fprintf(stderr, "ERROR al buscar %s , no existe ese directorio \n",
                   argv[1]);
+          status_aux = 1;
+        } else {
+          status_aux = 0;
         }
         aux = calloc(1000, sizeof(char));
 
@@ -529,11 +528,13 @@ int main(void) {
         aux_int = umask(0);
         printf("%o\n", aux_int);
         aux_int = umask(aux_int);
+        status_aux = 0;
 
       } else {
 
         if (argv[2]) {
           fprintf(stderr, "no debe de haber mas de 1 argumento en umask");
+          status_aux = 1;
           goto fin_secuencia;
         } else {
           char *c_end;
@@ -543,9 +544,11 @@ int main(void) {
               !(aux_int >= 0 && aux_int <= 0777)) {
 
             fprintf(stderr, "mascara \" %s \" invalida \n", argv[1]);
+            status_aux = 1;
             goto fin_secuencia;
           }
 
+          status_aux = 0;
           umask(aux_int);
         }
       }
@@ -555,13 +558,16 @@ int main(void) {
         while (environ[i]) {
           printf("%s\n", environ[i++]);
         }
+        status_aux = 0;
 
       } else if (!argv[2]) {
 
         if (getenv(argv[1])) {
           printf("%s=%s\n", argv[1], getenv(argv[1]));
+          status_aux = 0;
         } else {
           printf("variable no declarada\n");
+          status_aux = 1;
         }
 
       }
@@ -590,6 +596,7 @@ int main(void) {
           }
         }
         free(aux);
+        status_aux = 0;
       }
     } else if (strcmp(argv[0], "limit") == 0) {
       struct rlimit aux_lim;
@@ -599,18 +606,22 @@ int main(void) {
 
           if (tipo_recurso(resources[i]) == -1) {
             fprintf(stderr, "ERROR recurso no encontrado \n");
+            status_aux = 1;
           } else {
             if (getrlimit(tipo_recurso(resources[i]), aux) == 0) {
-              if (aux->rlim_cur == RLIM_INFINITY) {
-                fprintf(stdout, "%s\t-1\n", resources[i]);
-              }
+              //  if (aux->rlim_cur == RLIM_INFINITY) {
+              //   fprintf(stdout, "%s\t-1\n", resources[i]);
+              // }
 
-              else {
+              // else {
 
-                fprintf(stdout, "%s\t%d\n", resources[i], (int)aux->rlim_max);
-              }
+              fprintf(stdout, "%s\t%ld\n", resources[i], aux->rlim_cur);
+              status_aux = 0;
+
+              //}
             } else {
               perror("ERROR getlimtr");
+              status_aux = 1;
             }
           }
         }
@@ -622,6 +633,7 @@ int main(void) {
         if (!argv[2]) {
           if (tipo_recurso(argv[1]) == -1) {
             fprintf(stderr, "ERROR recurso no encontrado \n");
+            status_aux = 1;
           } else {
             if (getrlimit(tipo_recurso(argv[1]), aux) == 0) {
 
@@ -631,17 +643,20 @@ int main(void) {
 
               else {
 
-                fprintf(stdout, "%s\t%d\n", argv[1], (int)aux->rlim_max);
+                fprintf(stdout, "%s\t%ld\n", argv[1], aux->rlim_cur);
               }
+              status_aux = 0;
             }
 
             else {
               perror("ERROR getlimtr");
+              status_aux = 1;
             }
           }
         } else {
           if (argv[3]) {
             printf("debe de ser solo 1 limit");
+            status_aux = 1;
           }
 
           else {
@@ -649,26 +664,28 @@ int main(void) {
             if (tipo_recurso(argv[1]) == -1) {
 
               fprintf(stderr, "ERROR recurso no encontrado \n");
+              status_aux = 1;
             } else {
               if (getrlimit(tipo_recurso(argv[1]), aux) == 0) {
                 int lim = strtol(argv[2], NULL, 0);
 
                 if (lim == -1) {
                   aux->rlim_max = RLIM_INFINITY;
-                } else {
-                  aux->rlim_max = lim;
-                }
-
-                if (aux->rlim_max == RLIM_INFINITY) {
                   aux->rlim_cur = RLIM_INFINITY;
-                } else if (aux->rlim_cur >= aux->rlim_max) {
-                  aux->rlim_cur = aux->rlim_max;
+                } else {
+                  if (aux->rlim_max != RLIM_INFINITY && lim > aux->rlim_max) {
+
+                    aux->rlim_max = lim;
+                  }
+                  aux->rlim_cur = lim;
                 }
                 if (setrlimit(tipo_recurso(argv[1]), aux) != 0) {
                   perror("ERROR setlimtr \n");
+                  status_aux = 1;
                 }
               } else {
                 perror("ERROR getlimtr");
+                status_aux = 1;
               }
             }
           }
@@ -677,14 +694,8 @@ int main(void) {
     }
 
     else {
-      pid_t pid = fork();
 
-      if (pid == -1) {
-        fprintf(stderr, "ERROR fork \n");
-      } else if (pid == 0) {
-        if (!es_hijo_bak) {
-          sigprocmask(SIG_UNBLOCK, &sigset, NULL);
-        }
+      if (es_hijo_bak) {
         if (execvp(argv[0], argv) == -1) {
 
           perror("ERROR execvp ");
@@ -694,15 +705,29 @@ int main(void) {
           exit(-1);
         }
       } else {
-        int valor;
-        wait(&valor);
-        if (WIFEXITED(valor)) {
-          int code = WEXITSTATUS(valor);
+        pid_t pid = fork();
 
-          char *aux = malloc(snprintf(NULL, 0, "%d", code) + 1);
-          sprintf(aux, "%d", code);
-          setenv("status", aux, 1);
-          free(aux);
+        if (pid == -1) {
+          fprintf(stderr, "ERROR fork \n");
+          status_aux = 1;
+        } else if (pid == 0) {
+          if (!es_hijo_bak) {
+            sigprocmask(SIG_UNBLOCK, &sigset, NULL);
+          }
+          if (execvp(argv[0], argv) == -1) {
+
+            perror("ERROR execvp ");
+            close(stdin_sav);
+            close(stdout_sav);
+            close(stderr_sav);
+            exit(-1);
+          }
+        } else {
+          int valor;
+          waitpid(pid, &valor, 0);
+          if (WIFEXITED(valor)) {
+            status_aux = WEXITSTATUS(valor) != 0;
+          }
         }
       }
     }
@@ -717,8 +742,17 @@ int main(void) {
     close(STDERR);
     dup(stderr_sav);
     if (es_hijo_bak || es_hijo_pipe) {
-      break;
+
+      close(stdin_sav);
+      close(stdout_sav);
+      close(stderr_sav);
+
+      exit(0);
     }
+    char *aux = malloc(snprintf(NULL, 0, "%d", status_aux) + 1);
+    sprintf(aux, "%d", status_aux);
+    setenv("status", aux, 1);
+    free(aux);
   }
   close(stdin_sav);
   close(stdout_sav);
